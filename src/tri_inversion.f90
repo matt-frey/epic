@@ -170,23 +170,19 @@ module tri_inversion
             ! Reverse x FFT:
             call revfft(nz+1, nx, velog(0:nz, :, 1), xtrig, xfactors)
 
-            ! Use symmetry to fill z grid lines outside domain:
-            velog(-1, :, 1) = velog(1, :, 1)
-            velog(-1, :, 2) = -velog(1, :, 2)
-            velog(nz+1, :, 1) = velog(nz-1, :, 1)
-            velog(nz+1, :, 2) = -velog(nz-1, :, 2)
+            ! Extrapolate to fill z grid lines outside domain:
+            velog(-1,   :, :) = two * velog(0,  :, :) - velog(1,    :, :)
+            velog(nz+1, :, :) = two * velog(nz, :, :) - velog(nz-1, :, :)
 
             ! Reverse x FFT of velocity gradient
             call revfft(nz+1, nx, velgradg(0:nz, :, 1), xtrig, xfactors)
             call revfft(nz+1, nx, velgradg(0:nz, :, 3), xtrig, xfactors)
 
-            ! Use symmetry to fill z grid lines outside domain:
-            ! u_x(nz+1) = u_x(nz-1)  (also for w_z)
-            ! w_x(nz+1) = -w_x(nz-1) (also for u_z)
-            velgradg(-1, :, 1) = velgradg(1, :, 1)
-            velgradg(-1, :, 3) = -velgradg(1, :, 3)
-            velgradg(nz+1, :, 1) = velgradg(nz-1, :, 1)
-            velgradg(nz+1, :, 3) = -velgradg(nz-1, :, 3)
+            ! Extrapolate to fill z grid lines outside domain:
+            velgradg(-1,   :, 1) = two * velgradg(0,  :, 1) - velgradg(1,    :, 1)
+            velgradg(-1,   :, 3) = two * velgradg(0,  :, 3) - velgradg(1,    :, 3)
+            velgradg(nz+1, :, 1) = two * velgradg(nz, :, 1) - velgradg(nz-1, :, 1)
+            velgradg(nz+1, :, 3) = two * velgradg(nz, :, 3) - velgradg(nz-1, :, 3)
 
             ! div(\vec{u}) = u_x + w_z = 0
             ! curl(\vec{u}) = w_x - u_z = zeta (= vorticity)
