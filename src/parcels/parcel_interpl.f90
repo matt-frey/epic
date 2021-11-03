@@ -262,6 +262,10 @@ module parcel_interpl
             ! z derivative used for the time step)
             tbuoyg(-1,   :) = two * tbuoyg(0,  :) - tbuoyg(1, :)
             tbuoyg(nz+1, :) = two * tbuoyg(nz, :) - tbuoyg(nz-1, :)
+#ifndef ENABLE_DRY_MODE
+            dbuoyg(-1,   :) = two * dbuoyg(0,  :) - dbuoyg(1, :)
+            dbuoyg(nz+1, :) = two * dbuoyg(nz, :) - dbuoyg(nz-1, :)
+#endif
 
             ! sum halo contribution into internal cells
             ! (be aware that halo cell contribution at upper boundary
