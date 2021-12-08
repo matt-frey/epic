@@ -7,7 +7,6 @@
 module qr
     use constants
     implicit none
-    external dsyevq3
 
     private
         integer, parameter :: n = 3
@@ -140,9 +139,6 @@ module qr
 
             m = n
 
-!             aa(1) = A(1, 1)
-!             aa(2) = A(2, 2)
-!             aa(3) = A(3, 3)
             bb(2) = A(2, 1)
             bb(3) = A(3, 2)
 
@@ -192,9 +188,6 @@ module qr
                     m = m - 1
                 endif
             enddo
-!             A(1, 1) = aa(1)
-!             A(2, 2) = aa(2)
-!             A(3, 3) = aa(3)
 
             call sort_descending(A, V)
 
