@@ -1,7 +1,7 @@
 &MODELS
 
  model       = 'Straka'
- h5fname     = 'straka2d.hdf5'
+ ncfname     = 'straka2d.nc'
 
  box%ncells  = 128, 16
  box%extent  = 51200, 6400
@@ -15,5 +15,9 @@
 
  ![m] ellipse radii (x, z)
  straka_flow%radii = 4000.0, 2000.0
+/
 
+&PHYSICS
+ gravity = 9.81d0
+ theta_0 = 300.0d0
 /

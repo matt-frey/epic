@@ -3,15 +3,14 @@
 ! =============================================================================
 module parcel_init
     use options, only : parcel, output, verbose, field_tol
-    use constants, only : zero, two, one, f12, f13, f23, max_num_parcels
+    use constants, only : zero, two, one, f12, f13, f23
     use parcel_container, only : parcels, n_parcels
     use parcel_ellipsoid, only : get_abc, get_eigenvalues
     use parcel_split_mod, only : parcel_split
     use parcel_interpl, only : trilinear, ngp
-    use parameters, only : update_parameters,   &
-                           dx, vcell, ncell,    &
-                           extent, lower, nx, ny, nz
-    use h5_reader
+    use parameters, only : dx, vcell, ncell,            &
+                           extent, lower, nx, ny, nz,   &
+                           max_num_parcels
     use timer, only : start_timer, stop_timer
     use omp_lib
     implicit none
@@ -26,8 +25,6 @@ module parcel_init
 
     private :: init_refine,                 &
                init_from_grids,             &
-               fill_field_from_buffer_3d,   &
-               fill_field_from_buffer_4d,   &
                alloc_and_precompute,        &
                dealloc
 
@@ -43,25 +40,13 @@ module parcel_init
         ! Set default values for parcel attributes
         ! Attention: This subroutine assumes that the parcel
         !            container is already allocated!
-        subroutine init_parcels(h5fname, tol)
-            character(*),     intent(in) :: h5fname
+        subroutine init_parcels(fname, tol)
+            character(*),     intent(in) :: fname
             double precision, intent(in) :: tol
             double precision             :: lam, l23
-            integer(hid_t)               :: h5handle
-            integer                      :: n, ncells(3)
+            integer                      :: n
 
             call start_timer(init_timer)
-
-            ! read domain dimensions
-            call open_h5_file(h5fname, H5F_ACC_RDONLY_F, h5handle)
-            call read_h5_box(h5handle, ncells, extent, lower)
-            nx = ncells(1)
-            ny = ncells(2)
-            nz = ncells(3)
-            call close_h5_file(h5handle)
-
-            ! update global parameters
-            call update_parameters
 
             ! set the number of parcels (see parcels.f90)
             ! we use "n_per_cell" parcels per grid cell
@@ -120,7 +105,7 @@ module parcel_init
             !$omp end do
             !$omp end parallel
 
-            call init_from_grids(h5fname, tol)
+            call init_from_grids(fname, tol)
 
             call stop_timer(init_timer)
 
@@ -183,9 +168,11 @@ module parcel_init
         ! Precompute weights, indices of trilinear
         ! interpolation and "apar"
         subroutine alloc_and_precompute
-            double precision :: resi(0:nz, 0:ny-1, 0:nx-1), rsum
-            integer          :: l, n
+            double precision, allocatable :: resi(:, :, :)
+            double precision              :: rsum
+            integer                       :: l, n
 
+            allocate(resi(0:nz, 0:ny-1, 0:nx-1))
             allocate(apar(n_parcels))
             allocate(weights(ngp, n_parcels))
             allocate(is(ngp, n_parcels))
@@ -201,6 +188,11 @@ module parcel_init
                 call trilinear(parcels%position(:, n), is(:, n), js(:, n), ks(:, n), weights(:, n))
 
                 do l = 1, ngp
+                    ! catch if in halo
+                    if ((ks(l, n) < 0) .or. (ks(l, n) > nz)) then
+                        print *, "Error: Tries to access undefined halo grid point."
+                        stop
+                    endif
                     resi(ks(l, n), js(l, n), is(l, n)) = resi(ks(l, n), js(l, n), is(l, n)) + weights(l, n)
                 enddo
             enddo
@@ -221,6 +213,8 @@ module parcel_init
             enddo
             !$omp end parallel do
 
+            deallocate(resi)
+
         end subroutine alloc_and_precompute
 
         subroutine dealloc
@@ -231,100 +225,67 @@ module parcel_init
             deallocate(ks)
         end subroutine dealloc
 
-
         ! Initialise parcel attributes from gridded quantities.
         ! Attention: This subroutine currently only supports
         !            vorticity and buoyancy fields.
-        subroutine init_from_grids(h5fname, tol)
-            character(*),     intent(in)  :: h5fname
+        subroutine init_from_grids(ncfname, tol)
+            use netcdf_reader
+            character(*),     intent(in)  :: ncfname
             double precision, intent(in)  :: tol
-            double precision, allocatable :: buffer_3d(:, :, :), &
-                                             buffer_4d(:, :, :, :)
-            double precision              :: field_3d(-1:nz+1, 0:ny-1, 0:nx-1), &
-                                             field_4d(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-            integer(hid_t)                :: h5handle
-            integer                       :: l
+            double precision              :: buffer(-1:nz+1, 0:ny-1, 0:nx-1)
+            integer                       :: ncid
+            integer                       :: n_steps, start(4), cnt(4)
 
             call alloc_and_precompute
 
-            call open_h5_file(h5fname, H5F_ACC_RDONLY_F, h5handle)
+            call open_netcdf_file(ncfname, NF90_NOWRITE, ncid)
 
-            if (has_dataset(h5handle, 'vorticity')) then
-                call read_h5_dataset(h5handle, 'vorticity', buffer_4d)
-                call fill_field_from_buffer_4d(buffer_4d, field_4d)
-                deallocate(buffer_4d)
-                do l = 1, 3
-                    call gen_parcel_scalar_attr(field_4d(:, :, :, l), tol, parcels%vorticity(l, :))
-                enddo
+            call get_num_steps(ncid, n_steps)
+
+            cnt  =  (/ nx, ny, nz+1, 1       /)
+            start = (/ 1,  1,  1,    n_steps /)
+
+            if (has_dataset(ncid, 'x_vorticity')) then
+                buffer = zero
+                call read_netcdf_dataset(ncid, 'x_vorticity', buffer(0:nz, :, :), &
+                                         start=start, cnt=cnt)
+                call gen_parcel_scalar_attr(buffer, tol, parcels%vorticity(1, :))
             endif
 
-            if (has_dataset(h5handle, 'buoyancy')) then
-                call read_h5_dataset(h5handle, 'buoyancy', buffer_3d)
-                call fill_field_from_buffer_3d(buffer_3d, field_3d)
-                deallocate(buffer_3d)
-                call gen_parcel_scalar_attr(field_3d, tol, parcels%buoyancy)
+            if (has_dataset(ncid, 'y_vorticity')) then
+                buffer = zero
+                call read_netcdf_dataset(ncid, 'y_vorticity', buffer(0:nz, :, :), &
+                                         start=start, cnt=cnt)
+                call gen_parcel_scalar_attr(buffer, tol, parcels%vorticity(2, :))
             endif
 
-            call close_h5_file(h5handle)
+            if (has_dataset(ncid, 'z_vorticity')) then
+                buffer = zero
+                call read_netcdf_dataset(ncid, 'z_vorticity', buffer(0:nz, :, :), &
+                                         start=start, cnt=cnt)
+                call gen_parcel_scalar_attr(buffer, tol, parcels%vorticity(3, :))
+            endif
+
+            if (has_dataset(ncid, 'buoyancy')) then
+                buffer = zero
+                call read_netcdf_dataset(ncid, 'buoyancy', buffer(0:nz, :, :), &
+                                         start=start, cnt=cnt)
+                call gen_parcel_scalar_attr(buffer, tol, parcels%buoyancy)
+            endif
+
+#ifndef ENABLE_DRY_MODE
+            if (has_dataset(ncid, 'humidity')) then
+                buffer = zero
+                call read_netcdf_dataset(ncid, 'humidity', buffer(0:nz, :, :), &
+                                         start=start, cnt=cnt)
+                call gen_parcel_scalar_attr(buffer, tol, parcels%humidity)
+            endif
+#endif
+            call close_netcdf_file(ncid)
 
             call dealloc
 
         end subroutine init_from_grids
-
-        ! After reading the H5 dataset scalar field into the buffer, copy
-        ! the data to a field container
-        ! @pre field and buffer must be of rank 3
-        subroutine fill_field_from_buffer_3d(buffer, field)
-            double precision, allocatable :: buffer(:, :, :)
-            double precision              :: field(-1:nz+1, 0:ny-1, 0:nx-1)
-            integer                       :: dims(3), bdims(3), i, j, k
-
-            dims = (/nz+1, ny, nx/)
-
-            bdims = shape(buffer)
-            if (.not. sum(dims - bdims) == 0) then
-                print "(a32, i4, a1, i4, a1, i4, a6, i4, a1, i4, a1, i4, a1)", &
-                      "Field dimensions do not agree: (", dims(1), ",", &
-                      dims(2), ",", dims(3), ") != (", bdims(1), ",", bdims(2), ",", bdims(3), ")"
-                stop
-            endif
-
-            do i = 0, nx-1
-                do j = 0, ny-1
-                    do k = 0, nz
-                        field(k, j, i) = buffer(k, j, i)
-                    enddo
-                enddo
-            enddo
-        end subroutine fill_field_from_buffer_3d
-
-        ! After reading the H5 dataset vector field into the buffer, copy
-        ! the data to a field container
-        ! @pre field and buffer must be of rank 4
-        subroutine fill_field_from_buffer_4d(buffer, field)
-            double precision, allocatable :: buffer(:, :, :, :)
-            double precision              :: field(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-            integer                       :: dims(4), bdims(4), i, j, k
-
-            dims = (/nz+1, ny, nx, 3/)
-
-            bdims = shape(buffer)
-            if (.not. sum(dims - bdims) == 0) then
-                print "(a32, i4, a1, i4, a1, i4, a1, i4, a6, i4, a1, i4, a1, i4, a1, i4, a1)", &
-                      "Field dimensions do not agree: (", dims(1), ",", &
-                      dims(2), ",", dims(3), ",", dims(4), ") != (",    &
-                      bdims(1), ",", bdims(2), ",", bdims(3), ",", bdims(4), ")"
-                stop
-            endif
-
-            do i = 0, nx-1
-                do j = 0, ny-1
-                    do k = 0, nz
-                        field(k, j, i, :) = buffer(k, j, i, :)
-                    enddo
-                enddo
-            enddo
-        end subroutine fill_field_from_buffer_4d
 
         ! Generates the parcel attribute "par" from the field values provided
         ! in "field" (see Fontane & Dritschel, J. Comput. Phys. 2009, section 2.2)

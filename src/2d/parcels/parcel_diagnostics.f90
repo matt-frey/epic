@@ -5,21 +5,13 @@ module parcel_diagnostics
     use constants, only : zero, one, f12
     use merge_sort
     use parameters, only : extent, lower, vcell, vmin, nx, nz
-    use options, only : verbose, write_h5_options
     use parcel_container, only : parcels, n_parcels
     use parcel_ellipse
-    use h5_utils
-    use h5_writer
     use omp_lib
     use timer, only : start_timer, stop_timer
     implicit none
 
-
-    private
-
-    ! h5 file handle
-    integer(hid_t)     :: h5file_id
-    character(len=512) :: h5fname
+    integer :: parcel_stats_timer
 
     ! peref : potential energy reference
     ! pe    : potential energy
@@ -38,6 +30,12 @@ module parcel_diagnostics
     ! rms vorticity
     double precision :: rms_zeta
 
+    ! min and max buoyancy
+    double precision :: bmin, bmax
+
+    ! min and max vorticity
+    double precision :: vormin, vormax
+
 #ifdef ENABLE_DIAGNOSE
     ! buoyancy weighted first and second moments
     double precision :: xb_bar, x2b_bar
@@ -50,36 +48,7 @@ module parcel_diagnostics
     double precision :: xzv_bar
 #endif
 
-    integer :: hdf5_parcel_stat_timer
-
-    public :: create_h5_parcel_stat_file,   &
-              init_parcel_diagnostics,      &
-              calc_parcel_diagnostics,      &
-              write_h5_parcel_stats_step,   &
-              hdf5_parcel_stat_timer
-
     contains
-
-        ! Create the parcel diagnostic file.
-        ! @param[in] basename of the file
-        ! @param[in] overwrite the file
-        subroutine create_h5_parcel_stat_file(basename, overwrite)
-            character(*), intent(in) :: basename
-            logical,      intent(in) :: overwrite
-
-            h5fname =  basename // '_parcel_stats.hdf5'
-
-            call create_h5_file(h5fname, overwrite, h5file_id)
-
-            call write_h5_scalar_attrib(h5file_id, 'output_type', 'parcel diagnostics')
-
-            call write_h5_timestamp(h5file_id)
-            call write_h5_options(h5file_id)
-            call write_h5_box(h5file_id, lower, extent, (/nx, nz/))
-
-            call close_h5_file(h5file_id)
-
-        end subroutine create_h5_parcel_stat_file
 
         ! Compute the reference potential energy
         subroutine init_parcel_diagnostics
@@ -87,34 +56,47 @@ module parcel_diagnostics
             double precision :: b(n_parcels)
             double precision :: gam, zmean
 
+            call start_timer(parcel_stats_timer)
+
             b = parcels%buoyancy(1:n_parcels)
 
             ! sort buoyancy in ascending order
             call msort(b, ii)
 
-            gam = one / extent(1)
-            zmean = f12 * gam * parcels%volume(ii(1))
+            gam = f12 / extent(1)
+            zmean = gam * parcels%volume(ii(1))
 
             peref = - b(1) * parcels%volume(ii(1)) * zmean
             do n = 2, n_parcels
-                zmean = zmean + gam * parcels%volume(ii(n))
+                zmean = zmean + gam * (parcels%volume(ii(n-1)) + parcels%volume(ii(n)))
 
                 peref = peref &
                       - b(n) * parcels%volume(ii(n)) * zmean
             enddo
+
+            call stop_timer(parcel_stats_timer)
         end subroutine init_parcel_diagnostics
 
 
         ! Calculate all parcel related diagnostics
-        subroutine calc_parcel_diagnostics(velocity)
+        subroutine calculate_parcel_diagnostics(velocity)
             double precision :: velocity(:, :)
             integer          :: n
             double precision :: b, z, vel(2), vol, zmin
             double precision :: eval, lam, B22, lsum, l2sum, vsum, v2sum
 
+            call start_timer(parcel_stats_timer)
+
             ! reset
             ke = zero
             pe = zero
+
+            ! find extrema outside OpenMP loop, we can integrate it later;
+            ! this way the result is reproducible
+            bmin = minval(parcels%buoyancy(1:n_parcels))
+            bmax = maxval(parcels%buoyancy(1:n_parcels))
+            vormin = minval(parcels%vorticity(1:n_parcels))
+            vormax = maxval(parcels%vorticity(1:n_parcels))
 
             lsum = zero
             l2sum = zero
@@ -137,10 +119,10 @@ module parcel_diagnostics
             !$omp& reduction(+: ke, pe, lsum, l2sum, vsum, v2sum, n_small, rms_zeta)
             do n = 1, n_parcels
 
-                vel = velocity(n, :)
+                vel = velocity(:, n)
                 vol = parcels%volume(n)
                 b   = parcels%buoyancy(n)
-                z   = parcels%position(n, 2) - zmin
+                z   = parcels%position(2, n) - zmin
 
                 ! kinetic energy
                 ke = ke + (vel(1) ** 2 + vel(2) ** 2) * vol
@@ -148,8 +130,8 @@ module parcel_diagnostics
                 ! potential energy
                 pe = pe - b * z * vol
 
-                B22 = get_B22(parcels%B(n, 1), parcels%B(n, 2), vol)
-                eval = get_eigenvalue(parcels%B(n, 1), parcels%B(n, 2), B22)
+                B22 = get_B22(parcels%B(1, n), parcels%B(2, n), vol)
+                eval = get_eigenvalue(parcels%B(1, n), parcels%B(2, n), B22)
                 lam = get_aspect_ratio(eval, vol)
 
                 lsum = lsum + lam
@@ -183,7 +165,10 @@ module parcel_diagnostics
 #ifdef ENABLE_DIAGNOSE
             call straka_diagnostics
 #endif
-        end subroutine calc_parcel_diagnostics
+
+            call stop_timer(parcel_stats_timer)
+
+        end subroutine calculate_parcel_diagnostics
 
 
 #ifdef ENABLE_DIAGNOSE
@@ -229,25 +214,25 @@ module parcel_diagnostics
             !$omp& reduction(+: vvsum, bvsum, xbv, zbv, x2bv, z2bv, xzbv, xvv, zvv, x2vv, z2vv, xzvv)
             do n = 1, n_parcels
                 ! we only use the upper half in horizontal direction
-                if (parcels%position(n, 1) >= 0) then
+                if (parcels%position(1, n) >= 0) then
                     bv = parcels%buoyancy(n) * parcels%volume(n)
                     bvsum = bvsum + bv
-                    xbv = xbv + bv * parcels%position(n, 1)
-                    zbv = zbv + bv * parcels%position(n, 2)
+                    xbv = xbv + bv * parcels%position(1, n)
+                    zbv = zbv + bv * parcels%position(2, n)
 
-                    x2bv = x2bv + bv * parcels%position(n, 1) ** 2
-                    z2bv = z2bv + bv * parcels%position(n, 2) ** 2
-                    xzbv = xzbv + bv * parcels%position(n, 2) * parcels%position(n, 2)
+                    x2bv = x2bv + bv * parcels%position(1, n) ** 2
+                    z2bv = z2bv + bv * parcels%position(2, n) ** 2
+                    xzbv = xzbv + bv * parcels%position(1, n) * parcels%position(2, n)
 
 
                     vv = parcels%vorticity(n) * parcels%volume(n)
                     vvsum = vvsum + vv
-                    xvv = xvv + vv * parcels%position(n, 1)
-                    zvv = zvv + vv * parcels%position(n, 2)
+                    xvv = xvv + vv * parcels%position(1, n)
+                    zvv = zvv + vv * parcels%position(2, n)
 
-                    x2vv = x2vv + vv * parcels%position(n, 1) ** 2
-                    z2vv = z2vv + vv * parcels%position(n, 2) ** 2
-                    xzvv = xzvv + vv * parcels%position(n, 2) * parcels%position(n, 2)
+                    x2vv = x2vv + vv * parcels%position(1, n) ** 2
+                    z2vv = z2vv + vv * parcels%position(2, n) ** 2
+                    xzvv = xzvv + vv * parcels%position(1, n) * parcels%position(2, n)
                 endif
             enddo
             !$omp end do
@@ -288,84 +273,4 @@ module parcel_diagnostics
             xzv_bar = xzvv * vvsum - xv_bar * zv_bar
         end subroutine straka_diagnostics
 #endif
-
-        ! Write a step in the parcel diagnostic file.
-        ! @param[inout] nw counts the number of writes
-        ! @param[in] t is the time
-        ! @param[in] dt is the time step
-        subroutine write_h5_parcel_stats_step(nw, t, dt)
-            integer,          intent(inout) :: nw
-            double precision, intent(in)    :: t
-            double precision, intent(in)    :: dt
-            integer(hid_t)                  :: group
-            character(:), allocatable       :: name
-            logical                         :: created
-
-            call start_timer(hdf5_parcel_stat_timer)
-
-#ifdef ENABLE_VERBOSE
-            if (verbose) then
-                print "(a19)", "write parcel diagnostics to h5"
-            endif
-#endif
-
-            call open_h5_file(h5fname, H5F_ACC_RDWR_F, h5file_id)
-
-            name = trim(get_step_group_name(nw))
-
-            call create_h5_group(h5file_id, name, group, created)
-
-            if (.not. created) then
-                call open_h5_group(h5file_id, name, group)
-            endif
-
-
-            call write_h5_scalar_attrib(group, "t", t)
-
-            call write_h5_scalar_attrib(group, "dt", dt)
-
-            !
-            ! write diagnostics
-            !
-            call write_h5_scalar_attrib(group, "potential energy", pe)
-            call write_h5_scalar_attrib(group, "kinetic energy", ke)
-            call write_h5_scalar_attrib(group, "total energy", ke + pe)
-            call write_h5_scalar_attrib(group, "num parcel", n_parcels)
-            call write_h5_scalar_attrib(group, "num small parcels", n_small)
-
-
-            call write_h5_scalar_attrib(group, "avg aspect ratio", avg_lam)
-            call write_h5_scalar_attrib(group, "std aspect ratio", std_lam)
-            call write_h5_scalar_attrib(group, "avg volume", avg_vol)
-            call write_h5_scalar_attrib(group, "std volume", std_vol)
-
-            call write_h5_scalar_attrib(group, "rms vorticity", rms_zeta)
-
-#ifdef ENABLE_DIAGNOSE
-            call write_h5_scalar_attrib(group, "xb_bar", xb_bar)
-            call write_h5_scalar_attrib(group, "x2b_bar", x2b_bar)
-            call write_h5_scalar_attrib(group, "zb_bar", zb_bar)
-            call write_h5_scalar_attrib(group, "z2b_bar", z2b_bar)
-            call write_h5_scalar_attrib(group, "xzb_bar", xzb_bar)
-
-            call write_h5_scalar_attrib(group, "xv_bar", xv_bar)
-            call write_h5_scalar_attrib(group, "x2v_bar", x2v_bar)
-            call write_h5_scalar_attrib(group, "zv_bar", zv_bar)
-            call write_h5_scalar_attrib(group, "z2v_bar", z2v_bar)
-            call write_h5_scalar_attrib(group, "xzv_bar", xzv_bar)
-#endif
-            call close_h5_group(group)
-
-            ! increment counter
-            nw = nw + 1
-
-            ! update number of iterations to h5 file
-            call write_h5_num_steps(h5file_id, nw)
-
-
-            call close_h5_file(h5file_id)
-
-            call stop_timer(hdf5_parcel_stat_timer)
-
-        end subroutine write_h5_parcel_stats_step
 end module parcel_diagnostics

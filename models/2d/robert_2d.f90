@@ -12,16 +12,17 @@
 ! =============================================================================
 
 module robert_2d
-    use phys_constants
     use constants
-    use h5_writer
+    use netcdf_writer
+    use physics, only : write_physical_quantities, &
+                        gravity, theta_0
     implicit none
 
     private
 
     double precision, allocatable :: buoyg(:, :)
 
-    double precision :: ref_theta = 303.15d0    ![K] reference potential temperature
+    integer :: buo_id
 
     type bubble_type
         character(len=8) :: distr           ! distribution ('gaussian' or 'uniform')
@@ -44,13 +45,25 @@ module robert_2d
 
     contains
 
-        subroutine robert_init(h5handle, nx, nz, origin, dx)
-            integer(hid_t),   intent(inout) :: h5handle
+        subroutine robert_init(ncid, dimids, nx, nz, origin, dx)
+            integer,          intent(inout) :: ncid
+            integer,          intent(in)    :: dimids(:)
             integer,          intent(in)    :: nx, nz
             double precision, intent(in)    :: origin(2)
             double precision, intent(in)    :: dx(2)
             integer                         :: k
             type(bubble_type)               :: bubble
+
+            call define_netcdf_dataset(ncid=ncid,                           &
+                                       name='buoyancy',                     &
+                                       long_name='buoyancy',                &
+                                       std_name='',                         &
+                                       unit='m/s^2',                        &
+                                       dtype=NF90_DOUBLE,                   &
+                                       dimids=dimids,                       &
+                                       varid=buo_id)
+
+            call close_definition(ncid)
 
             if (robert_flow%n_bubbles > size(robert_flow%bubbles)) then
                 print *, 'Number of bubbles beyond upper limit.'
@@ -75,7 +88,9 @@ module robert_2d
                 end select
             enddo
 
-            call write_h5_dataset(h5handle, '/', 'buoyancy', buoyg)
+            call write_netcdf_dataset(ncid, buo_id, buoyg)
+
+            call write_physical_quantities(ncid)
 
             deallocate(buoyg)
 
@@ -108,10 +123,10 @@ module robert_2d
                     endif
 
                     ! MPIC paper:
-                    ! liquid-water buoyancy is defined by b = g * (theta − ref_theta) / ref_theta
-                    ! (dtheta = theta - ref_theta)
+                    ! liquid-water buoyancy is defined by b = g * (theta − theta_0) / theta_0
+                    ! (dtheta = theta - theta_0)
                     buoyg(j, i) = buoyg(j, i) &
-                                + gravity * dtheta / ref_theta
+                                + gravity * dtheta / theta_0
                 enddo
             enddo
         end subroutine robert_uniform_init
@@ -154,10 +169,10 @@ module robert_2d
                     endif
 
                     ! MPIC paper:
-                    ! liquid-water buoyancy is defined by b = g * (theta − ref_theta) / ref_theta
-                    ! (dtheta = theta - ref_theta)
+                    ! liquid-water buoyancy is defined by b = g * (theta − theta_0) / theta_0
+                    ! (dtheta = theta - theta_0)
                     buoyg(j, i) = buoyg(j, i) &
-                                + gravity * dtheta / ref_theta
+                                + gravity * dtheta / theta_0
                 enddo
             enddo
         end subroutine robert_gaussian_init

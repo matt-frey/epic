@@ -1,7 +1,7 @@
 &MODELS
 
  model      = 'Robert'
- h5fname    = 'robert2d.hdf5'
+ ncfname    = 'robert2d.nc'
 
  box%ncells = 32, 48
  box%extent = 1000, 1500
@@ -21,4 +21,9 @@
  robert_flow%bubbles(2)%radius = 0.0
  robert_flow%bubbles(2)%width = 50.0
 
+/
+
+&PHYSICS
+ gravity = 9.81d0
+ theta_0 = 303.15d0
 /

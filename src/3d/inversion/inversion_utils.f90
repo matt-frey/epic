@@ -26,14 +26,14 @@ module inversion_utils
     !Horizontal wavenumbers:
     double precision, allocatable :: rkx(:), hrkx(:), rky(:), hrky(:)
 
+    ! Note k2l2i = 1/(k^2+l^2) (except k = l = 0, then k2l2i(0, 0) = 0)
+    double precision, allocatable :: k2l2i(:, :)
+
     !Quantities needed in FFTs:
     double precision, allocatable :: xtrig(:), ytrig(:)
     integer :: xfactors(5), yfactors(5)
     integer, parameter :: nsubs_tri = 8 !number of blocks for openmp
     integer :: nxsub
-
-    !De-aliasing filter:
-    double precision, allocatable :: filt(:, :)
 
     double precision :: dz, dzi, dz2, dz6, dz24, hdzi, dzisq
     integer :: nwx, nwy, nxp2, nyp2
@@ -51,12 +51,12 @@ module inversion_utils
             , fftxyp2s  &
             , fftxys2p  &
             , dz2       &
-            , filt      &
             , hdzi      &
             , xfactors  &
             , yfactors  &
             , xtrig     &
-            , ytrig
+            , ytrig     &
+            , k2l2i
 
     contains
 
@@ -65,10 +65,10 @@ module inversion_utils
         !Initialises this module (FFTs, x & y wavenumbers, tri-diagonal
         !coefficients, etc).
         subroutine init_fft
-            double precision   :: a0(nx, ny), a0b(nx, ny), ksq(nx, ny)
-            double precision   :: rkxmax, rkymax
-            double precision   :: rksqmax, rkfsq
-            integer            :: kx, ky, iz, isub, ib_sub, ie_sub
+            double precision, allocatable  :: a0(:, :), a0b(:, :), ksq(:, :)
+            double precision               :: rkxmax, rkymax
+            double precision               :: rksqmax
+            integer                        :: kx, ky, iz, isub, ib_sub, ie_sub
 
             if (is_initialised) then
                 return
@@ -88,6 +88,11 @@ module inversion_utils
             nyp2 = ny + 2
             nxp2 = nx + 2
 
+            allocate(a0(nx, ny))
+            allocate(a0b(nx, ny))
+            allocate(ksq(nx, ny))
+            allocate(k2l2i(nx, ny))
+
             allocate(etdh(nz-1, nx, ny))
             allocate(htdh(nz-1, nx, ny))
             allocate(ap(nx, ny))
@@ -106,7 +111,6 @@ module inversion_utils
             allocate(hrky(ny))
             allocate(xtrig(2 * nx))
             allocate(ytrig(2 * ny))
-            allocate(filt(nx, ny))
 
             nxsub = nx / nsubs_tri
 
@@ -142,19 +146,9 @@ module inversion_utils
                 enddo
             enddo
 
-            !--------------------------------------------------------------------
-            ! Define de-aliasing filter:
-            rkfsq = two * rksqmax / nine
-            ! rkfsq: the square of the filter wavenumber (generic 2/3 rule)
-            do ky = 1, ny
-                do kx = 1, nx
-                    if (ksq(kx, ky) .gt. rkfsq) then
-                        filt(kx, ky) = zero
-                    else
-                        filt(kx, ky) = one
-                    endif
-                enddo
-            enddo
+            ksq(1, 1) = one
+            k2l2i = one / ksq
+            ksq(1, 1) = zero
 
             !-----------------------------------------------------------------------
             ! Fixed coefficients used in the tridiagonal problems:
@@ -237,6 +231,11 @@ module inversion_utils
                 etda(iz) = -f16 * htda(iz)
             enddo
             htda(nz) = one / (one + f16 + f16 * etda(nz-2))
+
+
+            deallocate(a0)
+            deallocate(a0b)
+            deallocate(ksq)
         end subroutine
 
 
@@ -583,7 +582,7 @@ module inversion_utils
         ! space and returns the result as fp in physical space (in x & y).
         ! Only inverse FFTs over the x and y directions are performed.
         ! *** fs is destroyed upon exit ***
-        subroutine fftxys2p(fs,fp)
+        subroutine fftxys2p(fs, fp)
             double precision, intent(inout):: fs(:, :, :)  !Spectral
             double precision, intent(out)  :: fp(:, :, :)  !Physical
             integer                        :: kx, iy, nzval, nxval, nyval

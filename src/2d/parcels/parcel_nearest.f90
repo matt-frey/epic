@@ -2,9 +2,9 @@
 !               Finds the parcels nearest every "small" parcel
 !==============================================================================
 module parcel_nearest
-    use constants, only : pi, f12, max_num_parcels
+    use constants, only : pi, f12
     use parcel_container, only : parcels, n_parcels, get_delx
-    use parameters, only : dx, dxi, vcell, hli, lower, extent, ncell, nx, nz, vmin
+    use parameters, only : dx, dxi, vcell, hli, lower, extent, ncell, nx, nz, vmin, max_num_parcels
     use options, only : parcel
     use timer, only : start_timer, stop_timer
 
@@ -16,21 +16,21 @@ module parcel_nearest
 
     !Used for searching for possible parcel merger:
     integer, allocatable :: nppc(:), kc1(:),kc2(:)
-    integer :: loca(max_num_parcels)
-    integer :: node(max_num_parcels)
+    integer, allocatable :: loca(:)
+    integer, allocatable :: node(:)
 
     ! Logicals used to determine which mergers are executed
     ! Integers above could be reused for this, but this would
     ! make the algorithm less readable
-    logical :: l_leaf(max_num_parcels)
-    logical :: l_available(max_num_parcels)
-    logical :: l_first_merged(max_num_parcels) ! indicates parcels merged in first stage
+    logical, allocatable :: l_leaf(:)
+    logical, allocatable :: l_available(:)
+    logical, allocatable :: l_first_merged(:) ! indicates parcels merged in first stage
 
 #ifndef NDEBUG
     ! Logicals that are only needed for sanity checks
-    logical :: l_merged(max_num_parcels)! SANITY CHECK ONLY
-    logical :: l_small(max_num_parcels) ! SANITY CHECK ONLY
-    logical :: l_close(max_num_parcels) ! SANITY CHECK ONLY
+    logical, allocatable :: l_merged(:)! SANITY CHECK ONLY
+    logical, allocatable :: l_small(:) ! SANITY CHECK ONLY
+    logical, allocatable :: l_close(:) ! SANITY CHECK ONLY
 #endif
 
     logical :: l_continue_iteration, l_do_merge
@@ -63,6 +63,16 @@ module parcel_nearest
                 allocate(nppc(ncell))
                 allocate(kc1(ncell))
                 allocate(kc2(ncell))
+                allocate(loca(max_num_parcels))
+                allocate(node(max_num_parcels))
+                allocate(l_leaf(max_num_parcels))
+                allocate(l_available(max_num_parcels))
+                allocate(l_first_merged(max_num_parcels))
+#ifndef NDEBUG
+                allocate(l_merged(max_num_parcels))
+                allocate(l_small(max_num_parcels))
+                allocate(l_close(max_num_parcels))
+#endif
             endif
 
             nmerge = 0
@@ -74,8 +84,8 @@ module parcel_nearest
             ! Bin parcels in cells:
             ! Form list of small parcels:
             do n = 1, n_parcels
-                ix = int(dxi(1) * (parcels%position(n,1) - lower(1)))
-                iz = int(dxi(2) * (parcels%position(n,2) - lower(2)))
+                ix = int(dxi(1) * (parcels%position(1, n) - lower(1)))
+                iz = int(dxi(2) * (parcels%position(2, n) - lower(2)))
 
                 ! Cell index of parcel:
                 ij = 1 + ix + nx * iz !This runs from 1 to ncell
@@ -137,8 +147,8 @@ module parcel_nearest
             ! Rather, stop if no nearest parcel found  in surrounding grid boxes
             do m = 1, nmerge
                 is = isma(m)
-                x_small = parcels%position(is, 1)
-                z_small = parcels%position(is, 2)
+                x_small = parcels%position(1, is)
+                z_small = parcels%position(2, is)
                 ! Parcel "is" is small and should be merged; find closest other:
                 ix0 = mod(nint(dxi(1) * (x_small - lower(1))), nx) ! ranges from 0 to nx-1
                 iz0 = nint(dxi(2) * (z_small - lower(2)))          ! ranges from 0 to nz
@@ -157,9 +167,9 @@ module parcel_nearest
                         do k = kc1(ij), kc2(ij)
                             n = node(k)
                             if (n .ne. is) then
-                                delz = parcels%position(n,2) - z_small
+                                delz = parcels%position(2, n) - z_small
                                 if (delz*delz < dsqmin) then
-                                    delx = get_delx(parcels%position(n,1), x_small) ! works across periodic edge
+                                    delx = get_delx(parcels%position(1, n), x_small) ! works across periodic edge
                                     ! Minimise dsqmin
                                     dsq = delz * delz + delx * delx
                                     if (dsq < dsqmin) then

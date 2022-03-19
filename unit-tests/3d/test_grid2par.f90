@@ -5,19 +5,20 @@
 ! =============================================================================
 program test_trilinear
     use unit_test
-    use constants, only : pi, zero, one, two, three, f12, f23
+    use constants, only : pi, zero, one, two, three, four, five, f12, f23
+    use physics, only : ft_cor, f_cor
     use parcel_container
     use parcel_interpl, only : grid2par, grid2par_timer
     use parcel_ellipsoid, only : get_abc
     use parameters, only : lower, update_parameters, vcell, dx, nx, ny, nz
-    use fields, only : velog, velgradg, vtend, field_alloc
+    use fields, only : velog, vortg, velgradg, dbdx, dbdy, field_alloc
     use timer
     implicit none
 
     double precision              :: error
     integer                       :: ix, iy, iz, i, j, k, l, n_per_dim
     double precision              :: im, corner(3)
-    double precision, allocatable :: vel(:, :), vor(:, :), vgrad(:, :)
+    double precision, allocatable :: vel(:, :), vortend(:, :), vgrad(:, :)
 
     nx = 32
     ny = 32
@@ -36,9 +37,9 @@ program test_trilinear
     n_parcels = n_per_dim ** 3 * nx *ny *nz
     call parcel_alloc(n_parcels)
 
-    allocate(vel(n_parcels, 3))
-    allocate(vor(n_parcels, 3))
-    allocate(vgrad(n_parcels, 5))
+    allocate(vel(3, n_parcels))
+    allocate(vortend(3, n_parcels))
+    allocate(vgrad(5, n_parcels))
 
 
     im = one / dble(n_per_dim)
@@ -51,9 +52,9 @@ program test_trilinear
                 do k = 1, n_per_dim
                     do j = 1, n_per_dim
                         do i = 1, n_per_dim
-                            parcels%position(l, 1) = corner(1) + dx(1) * (dble(i) - f12) * im
-                            parcels%position(l, 2) = corner(2) + dx(2) * (dble(j) - f12) * im
-                            parcels%position(l, 3) = corner(3) + dx(3) * (dble(k) - f12) * im
+                            parcels%position(1, l) = corner(1) + dx(1) * (dble(i) - f12) * im
+                            parcels%position(2, l) = corner(2) + dx(2) * (dble(j) - f12) * im
+                            parcels%position(3, l) = corner(3) + dx(3) * (dble(k) - f12) * im
                             l = l + 1
                         enddo
                     enddo
@@ -67,40 +68,42 @@ program test_trilinear
     parcels%B(:, :) = zero
 
     ! b11
-    parcels%B(:, 1) = get_abc(parcels%volume(1:n_parcels)) ** f23
+    parcels%B(1, :) = get_abc(parcels%volume(1:n_parcels)) ** f23
 
     ! b22
-    parcels%B(:, 4) = parcels%B(:, 1)
-
-    vtend(:, :, :, 1) = one
-    vtend(:, :, :, 2) = two
-    vtend(:, :, :, 3) = three
+    parcels%B(4, :) = parcels%B(1, :)
 
     velog(:, :, :, 1) = one
     velog(:, :, :, 2) = two
     velog(:, :, :, 3) = three
 
+    vortg(:, :, :, 1) = one
+    vortg(:, :, :, 2) = two
+    vortg(:, :, :, 3) = three
+
+    dbdx = one
+    dbdy = two
+
     do l = 1, 5
         velgradg(:, :, :, l) = dble(l)
     enddo
 
-    call grid2par(vel, vor, vgrad)
+    ! we cannot check vortend since parcels%vorticity is used in grid2par
+    call grid2par(vel, vortend, vgrad)
 
     error = zero
 
     do l = 1, 3
-        error = max(error, maxval(dabs(vel(1:n_parcels, l) - dble(l))))
-        error = max(error, maxval(dabs(vor(1:n_parcels, l) - dble(l))))
+        error = max(error, maxval(dabs(vel(l, 1:n_parcels) - dble(l))))
     enddo
 
-    do l = 1, 9
-        error = max(error, maxval(dabs(vgrad(1:n_parcels, l) - dble(l))))
+    do l = 1, 5
+        error = max(error, maxval(dabs(vgrad(l, 1:n_parcels) - dble(l))))
     enddo
-
     call print_result_dp('Test grid2par', error, atol=dble(1.0e-14))
 
     deallocate(vel)
-    deallocate(vor)
+    deallocate(vortend)
     deallocate(vgrad)
 
 end program test_trilinear

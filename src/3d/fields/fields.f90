@@ -15,9 +15,8 @@ module fields
     ! Due to periodicity in x and y, the grid points in x go from 0 to nx-1
     ! and from 0 to ny-1 in y
     double precision, allocatable, dimension(:, :, :, :) :: &
-        velog,     &   ! velocity vector field
-        vortg,     &   ! vorticity vector field
-        vtend,     &   ! vorticity tendency
+        velog,     &   ! velocity vector field (u, v, w)
+        vortg,     &   ! vorticity vector field (\omegax, \omegay, \omegaz)
         velgradg       ! velocity gradient tensor
                        ! ordering: du/dx, du/dy,
                        !                  dv/dy,
@@ -35,6 +34,8 @@ module fields
         dbuoyg,    &   ! dry buoyancy (or liquid-water buoyancy)
 #endif
         tbuoyg,    &   ! buoyancy
+        dbdx,      &   ! buoyancy derivative in x
+        dbdy,      &   ! buoyancy derivative in y
 #ifndef NDEBUG
         sym_volg,  &   ! symmetry volume (debug mode only)
 #endif
@@ -63,7 +64,9 @@ module fields
 
             allocate(vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3))
 
-            allocate(vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3))
+            allocate(dbdx(-1:nz+1, 0:ny-1, 0:nx-1))
+
+            allocate(dbdy(-1:nz+1, 0:ny-1, 0:nx-1))
 
             allocate(tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1))
 
@@ -84,7 +87,8 @@ module fields
             velgradg = zero
             volg     = zero
             vortg    = zero
-            vtend    = zero
+            dbdx     = zero
+            dbdy     = zero
             tbuoyg   = zero
 #ifndef ENABLE_DRY_MODE
             dbuoyg   = zero
@@ -111,8 +115,8 @@ module fields
         ! Do periodic shift of the index
         ! @param[inout] ii zonal grid point indices
         ! @param[inout] jj meridional grid point indices
-        pure subroutine periodic_index_shift(ii, jj)
-            integer, intent(inout) :: ii(:), jj(:)
+        elemental pure subroutine periodic_index_shift(ii, jj)
+            integer, intent(inout) :: ii, jj
 
             ! account for x / y periodicity:
             ! -1          --> nx-1 / ny-1

@@ -3,7 +3,7 @@ module rk4_utils
     use fields, only : velgradg, tbuoyg, vortg
     use constants, only : zero, one, two, f12
     use parameters, only : nx, ny, nz, dxi
-    use jacobi, only : jacobi_diagonalise
+    use jacobi, only : jacobi_eigenvalues
 #ifdef ENABLE_VERBOSE
     use options, only : output
 #endif
@@ -84,7 +84,7 @@ module rk4_utils
             use options, only : time
             double precision, intent(in) :: t
             double precision             :: dt
-            double precision             :: gmax, bmax, strain(3, 3)
+            double precision             :: gmax, bmax, strain(3, 3), D(3)
             double precision             :: gradb(0:nz, 0:ny-1, 0:nx-1)
             double precision             :: db2(0:nz, 0:ny-1, 0:nx-1)
             integer                      :: ix, iy, iz
@@ -122,16 +122,13 @@ module rk4_utils
                         strain(2, 3) = two * velgradg(iz, iy, ix, 5) - vortg(iz, iy, ix, 1) ! dv/dz + dw/dy
                         strain(3, 3) = -(velgradg(iz, iy, ix, 1) + velgradg(iz, iy, ix, 3)) ! dw/dz
 
-                        strain(2, 1) = strain(1, 2)
-                        strain(3, 1) = strain(1, 3)
-                        strain(3, 2) = strain(2, 3)
+                        ! calculate its eigenvalues (strain is overwritten and diagonal entries
+                        ! will be the eigenvalues sorted in descending order), i.e.
+                        ! the largest eigenvalue is in D(1). The Jacobi solver
+                        ! requires the upper triangular matrix only.
+                        call jacobi_eigenvalues(strain, D)
 
-                        ! calculate its eigenvalues (strain is overwritten and will be
-                        ! the diagonal matrix with the eigenvalues sorted in descending order), i.e.
-                        ! the largest eigenvalue is in strain(1, 1).
-                        call jacobi_diagonalise(strain)
-
-                        gmax = max(gmax, strain(1, 1))
+                        gmax = max(gmax, D(1))
                     enddo
                 enddo
             enddo
@@ -166,7 +163,7 @@ module rk4_utils
 
             dt = min(time%alpha / gmax, time%alpha / bmax)
 #ifdef ENABLE_VERBOSE
-            fname = trim(output%h5_basename) // '_alpha_time_step.asc'
+            fname = trim(output%basename) // '_alpha_time_step.asc'
             inquire(file=fname, exist=exists)
             ! 23 August
             ! https://stackoverflow.com/questions/15526203/single-command-to-open-a-file-or-create-it-and-the-append-data

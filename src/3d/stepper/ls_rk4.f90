@@ -3,15 +3,16 @@
 !            (see https://doi.org/10.5194/gmd-10-3145-2017)
 ! =============================================================================
 module ls_rk4
-    use options, only : parcel
+    use options, only : parcel, time
     use parcel_container
     use parcel_bc
     use rk4_utils, only: get_dBdt, get_time_step
     use utils, only : write_step
     use parcel_interpl, only : par2grid, grid2par, grid2par_add
-    use fields, only : velgradg, velog, vortg, vtend, tbuoyg
-    use inversion_mod, only : vor2vel, vorticity_tendency
-    use parcel_diagnostics, only : calc_parcel_diagnostics
+    use fields, only : velgradg, velog, vortg, dbdx, dbdy, tbuoyg
+    use inversion_mod, only : vor2vel, buoyancy_derivatives
+    use parcel_diagnostics, only : calculate_parcel_diagnostics
+    use field_diagnostics, only : calculate_field_diagnostics
     use parameters, only : nx, nz
     use timer, only : start_timer, stop_timer, timings
     implicit none
@@ -73,22 +74,24 @@ module ls_rk4
             double precision, intent(inout) :: t
             double precision                :: dt
 
-            call par2grid
+            call par2grid((t > time%initial))
 
             ! need to be called in order to set initial time step;
             ! this is also needed for the first ls-rk4 substep
             call vor2vel(vortg, velog, velgradg)
 
-            call vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
+            call buoyancy_derivatives(tbuoyg, dbdx, dbdy)
 
             ! update the time step
             dt = get_time_step(t)
 
             call grid2par(delta_pos, delta_vor, strain)
 
-            call calc_parcel_diagnostics(delta_pos)
+            call calculate_parcel_diagnostics(delta_pos)
 
-            call write_step(t, dt)
+            call calculate_field_diagnostics
+
+            call write_step(t)
 
             call ls_rk4_substep(ca1, cb1, dt, 1)
 
@@ -143,7 +146,7 @@ module ls_rk4
             else
                 call vor2vel(vortg, velog, velgradg)
 
-                call vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
+                call buoyancy_derivatives(tbuoyg, dbdx, dbdy)
 
                 call grid2par_add(delta_pos, delta_vor, strain)
 

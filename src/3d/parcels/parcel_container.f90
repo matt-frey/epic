@@ -4,7 +4,8 @@
 ! =============================================================================
 module parcel_container
     use options, only : verbose
-    use parameters, only : extent, hli, center
+    use parameters, only : extent, hli, center, lower, upper
+    use parcel_ellipsoid, only : parcel_ellipsoid_allocate, parcel_ellipsoid_deallocate
     implicit none
 
     integer :: n_parcels
@@ -35,13 +36,25 @@ module parcel_container
         ! @param[in] x1 first zonal position
         ! @param[in] x2 second zonal position
         ! @returns delx = x1 - x2
+        ! WARNING input needs to be between lower and upper (see debug statement)
+#ifndef NDEBUG
+        function get_delx(x1, x2) result (delx)
+#else
         elemental function get_delx(x1, x2) result (delx)
+#endif
             double precision, intent(in) :: x1, x2
             double precision             :: delx
 
             delx = x1 - x2
+#ifndef NDEBUG
+            if ((x1 < lower(1)) .or. (x2 < lower(1)) .or. (x1 > upper(1)) .or. (x2 > upper(1))) then
+                write(*,*) 'point outside domain was fed into get_delx'
+                write(*,*) 'x1, x2, lower(1), upper(1)'
+                write(*,*) x1, x2, lower(1), upper(1)
+            endif
+#endif
             ! works across periodic edge
-            delx = delx - extent(1) * dble(int((delx - center(1)) * hli(1)))
+            delx = delx - extent(1) * dble(int(delx * hli(1)))
         end function get_delx
 
         ! Obtain the difference between two meridional coordinates
@@ -49,13 +62,25 @@ module parcel_container
         ! @param[in] y1 first meridional position
         ! @param[in] y2 second meridional position
         ! @returns dely = y1 - y2
+        ! WARNING input needs to be between lower and upper (see debug statement)
+#ifndef NDEBUG
+        function get_dely(y1, y2) result (dely)
+#else
         elemental function get_dely(y1, y2) result (dely)
+#endif
             double precision, intent(in) :: y1, y2
             double precision             :: dely
 
             dely = y1 - y2
+#ifndef NDEBUG
+            if ((y1 < lower(2)) .or. (y2 < lower(2)) .or. (y1 > upper(2)) .or. (y2 > upper(2))) then
+                write(*,*) 'point outside domain was fed into get_dely'
+                write(*,*) 'y1, y2, lower(2), upper(2)'
+                write(*,*) y1, y2, lower(2), upper(2)
+            endif
+#endif
             ! works across periodic edge
-            dely = dely - extent(2) * dble(int((dely - center(2)) * hli(2)))
+            dely = dely - extent(2) * dble(int(dely * hli(2)))
         end function get_dely
 
 
@@ -98,6 +123,7 @@ module parcel_container
 #ifndef ENABLE_DRY_MODE
             allocate(parcels%humidity(num))
 #endif
+            call parcel_ellipsoid_allocate
         end subroutine parcel_alloc
 
         ! Deallocate parcel memory
@@ -110,6 +136,7 @@ module parcel_container
 #ifndef ENABLE_DRY_MODE
             deallocate(parcels%humidity)
 #endif
+            call parcel_ellipsoid_deallocate
         end subroutine parcel_dealloc
 
 end module parcel_container

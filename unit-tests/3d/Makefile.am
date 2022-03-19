@@ -1,11 +1,9 @@
-if ENABLE_UNIT_TESTS
-
 AM_FCFLAGS =				\
 	-I $(top_builddir)/src/3d/ 	\
 	-I $(top_builddir)/unit-tests	\
 	-I $(top_builddir)/src/utils	\
-	-I $(top_builddir)/src/hdf5	\
-	-I $(top_builddir)/src/fft
+	-I $(top_builddir)/src/fft	\
+	-I $(top_builddir)/src/netcdf
 
 AM_LDFLAGS =						\
 	$(top_builddir)/src/3d/parcels/*.o 		\
@@ -20,8 +18,8 @@ libcombi_la_SOURCES =
 libcombi_la_LIBADD = 					\
 	$(top_builddir)/unit-tests/libunit_test.la	\
 	$(top_builddir)/src/utils/libepic_utils.la	\
-	$(top_builddir)/src/hdf5/libepic_hdf5.la	\
-	$(top_builddir)/src/fft/libepic_fft.la
+	$(top_builddir)/src/fft/libepic_fft.la		\
+	$(top_builddir)/src/netcdf/libepic_netcdf.la
 
 unittestsdir = $(prefix)/unit-tests
 
@@ -46,7 +44,6 @@ unittests_PROGRAMS = 				\
 	test_ellipsoid_reflection		\
 	test_free_slip_3d			\
 	test_vor2vel				\
-	test_vtend				\
 	test_velgradg				\
 	test_lapinv0_1				\
 	test_lapinv0_2				\
@@ -119,9 +116,6 @@ test_free_slip_3d_LDADD = libcombi.la
 test_vor2vel_SOURCES = test_vor2vel.f90
 test_vor2vel_LDADD = libcombi.la
 
-test_vtend_SOURCES = test_vtend.f90
-test_vtend_LDADD = libcombi.la
-
 test_velgradg_SOURCES = test_velgradg.f90
 test_velgradg_LDADD = libcombi.la
 
@@ -136,5 +130,3 @@ test_diffz0_LDADD = libcombi.la
 
 test_diffz1_SOURCES = test_diffz1.f90
 test_diffz1_LDADD = libcombi.la
-
-endif
