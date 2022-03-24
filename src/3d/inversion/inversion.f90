@@ -2,11 +2,12 @@ module inversion_mod
     use inversion_utils
     use parameters, only : nx, ny, nz
     use constants, only : zero, two, f12
+    use physics, only : f_cor, ft_cor
     use timer, only : start_timer, stop_timer
     implicit none
 
     integer :: vor2vel_timer,   &
-               db_timer
+               vtend_timer
 
     contains
 
@@ -184,16 +185,18 @@ module inversion_mod
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-        ! Compute the gridded buoyancy derivatives db/dx and db/dy
-        subroutine buoyancy_derivatives(tbuoyg, dbdx, dbdy)
+        ! Compute the gridded vorticity tendency:
+        subroutine vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
+            double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision, intent(out) :: dbdx(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision, intent(out) :: dbdy(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision              :: b(0:nz, 0:ny-1, 0:nx-1)    ! buoyancy in physical space
-            double precision              :: bs(0:nz, 0:nx-1, 0:ny-1)   ! buoyancy in spectral space
-            double precision              :: ds(0:nz, 0:nx-1, 0:ny-1)   ! buoyancy derivative in spectral space
+            double precision              :: b(0:nz, 0:ny-1, 0:nx-1)
+            double precision, intent(out) :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
+            double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+            double precision              :: bs(0:nz, 0:nx-1, 0:ny-1) ! spectral buoyancy
+            double precision              :: ds(0:nz, 0:nx-1, 0:ny-1) ! spectral derivatives
+            double precision              :: db(0:nz, 0:ny-1, 0:nx-1) ! buoyancy derivatives
 
-            call start_timer(db_timer)
+            call start_timer(vtend_timer)
 
             ! copy buoyancy
             b = tbuoyg(0:nz, :, :)
@@ -202,21 +205,45 @@ module inversion_mod
             call fftxyp2s(b, bs)
 
             call diffy(bs, ds)                      ! b_y = db/dy in spectral space
-            call fftxys2p(ds, dbdy(0:nz, :, :))     ! db = b_y in physical space
+            call fftxys2p(ds, db)                   ! db = b_y in physical space
+
+            !$omp parallel
+            !$omp workshare
+            vtend(0:nz, :, :, 1) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 1) & ! \omegax * du/dx
+                                 + (vortg(0:nz, :, :, 2) + ft_cor) * velgradg(0:nz, :, :, 2) & ! \omegay * du/dy
+                                 + (vortg(0:nz, :, :, 3) +  f_cor) *                         &
+                                            (vortg(0:nz, :, :, 2) + velgradg(0:nz, :, :, 4)) & ! \omegaz * du/dz
+                                 + db                                                          ! db/dy
+            !$omp end workshare
+            !$omp end parallel
 
             call diffx(bs, ds)                      ! b_x = db/dx in spectral space
-            call fftxys2p(ds, dbdx(0:nz, :, :))     ! db = b_x in physical space
+            call fftxys2p(ds, db)                   ! db = b_x in physical space
+
+            !$omp parallel
+            !$omp workshare
+            vtend(0:nz, :, :, 2) =  vortg(0:nz, :, :, 1)           *                         &
+                                            (vortg(0:nz, :, :, 3) + velgradg(0:nz, :, :, 2)) & ! \omegax * dv/dx
+                                 + (vortg(0:nz, :, :, 2) + ft_cor) * velgradg(0:nz, :, :, 3) & ! \omegay * dv/dy
+                                 + (vortg(0:nz, :, :, 3) + f_cor)  *                         &
+                                            (velgradg(0:nz, :, :, 5) - vortg(0:nz, :, :, 1)) & ! \omegaz * dv/dz
+                                 - db                                                          ! dbdx
+
+            vtend(0:nz, :, :, 3) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 4) & ! \omegax * dw/dx
+                                 + (vortg(0:nz, :, :, 2) + ft_cor) * velgradg(0:nz, :, :, 5) & ! \omegay * dw/dy
+                                 - (vortg(0:nz, :, :, 3) + f_cor)  *                         &
+                                         (velgradg(0:nz, :, :, 1) + velgradg(0:nz, :, :, 3))   ! \omegaz * dw/dz
+
+            !$omp end workshare
+            !$omp end parallel
 
             ! Extrapolate to halo grid points
-            dbdy(-1,   :, :) = two * dbdy(0,  :, :) - dbdy(1,    :, :)
-            dbdy(nz+1, :, :) = two * dbdy(nz, :, :) - dbdy(nz-1, :, :)
+            vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
+            vtend(nz+1, :, :, :) = two * vtend(nz, :, :, :) - vtend(nz-1, :, :, :)
 
-            dbdx(-1,   :, :) = two * dbdx(0,  :, :) - dbdx(1,    :, :)
-            dbdx(nz+1, :, :) = two * dbdx(nz, :, :) - dbdx(nz-1, :, :)
+            call stop_timer(vtend_timer)
 
-            call stop_timer(db_timer)
-
-        end subroutine buoyancy_derivatives
+        end subroutine vorticity_tendency
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
