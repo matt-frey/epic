@@ -26,7 +26,6 @@ module inversion_mod
                                              , cs(0:nz, 0:nx-1, 0:ny-1)
             double precision                :: ds(0:nz, 0:nx-1, 0:ny-1) &
                                              , es(0:nz, 0:nx-1, 0:ny-1)
-            double precision                :: dstop(0:nx-1, 0:ny-1), dsbot(0:nx-1, 0:ny-1)
             double precision                :: ubar(0:nz), vbar(0:nz)
             double precision                :: uavg, vavg
             integer                         :: iz
@@ -71,15 +70,11 @@ module inversion_mod
 
             !as & bs are now free to re-use
 
-            !Save boundary values for z derivative of w below:
-            dsbot = ds(0,  :, :)
-            dstop = ds(nz, :, :)
-
             !Invert to find vertical velocity \hat{w} (store in ds, spectrally):
             call lapinv0(ds)
 
             !Find \hat{w}' (store in es, spectrally):
-            call diffz0(ds, es, dsbot, dstop)
+            call diffz(ds, es)
 
             !Find x velocity component \hat{u}:
             call diffx(es, as)
@@ -279,7 +274,11 @@ module inversion_mod
             call fftxys2p(vs, vd)
 
             ! Compute z derivative by compact differences:
-            call diffz1(ds, ws)
+            call diffz(ds, ws)
+
+            ! Set vertical boundary values to zero
+            ws(0,  :, :) = zero
+            ws(nz, :, :) = zero
 
             ! Add on the x and y-independent part of wd:
             ws(:, 1, 1) = ws(:, 1, 1) + wbar
