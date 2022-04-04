@@ -21,9 +21,11 @@ module sta3dfft
     contains
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-        subroutine init3dfft
-            double precision :: cfilt, kmax, kc
-            integer          :: nwx, nwy, kx, ky, kz
+        subroutine init3dfft(nx, ny, nz, extent)
+            integer,          intent(in) :: nx, ny, nz
+            double precision, intent(in) :: extent(3)
+            double precision             :: cfilt, kmax, kc
+            integer                      :: nwx, nwy, kx, ky, kz
 
             if (.not. allocated(filt)) then
                 allocate(filt(0:nz, nx, ny))
@@ -37,13 +39,13 @@ module sta3dfft
                 allocate(ztrig(2*nz))
             endif
 
-            nwx = f12 * nx
-            nwy = f12 * ny
+            nwx = int(f12 * nx)
+            nwy = int(f12 * ny)
 
             !----------------------------------------------------------
             ! Set up FFTs:
             ! Initialise FFTs and wavenumber arrays:
-            call init2dfft(nx, ny, ellx, elly, xfactors, yfactors, xtrig, ytrig, hrkx, hrky)
+            call init2dfft(nx, ny, extent(1), extent(2), xfactors, yfactors, xtrig, ytrig, hrkx, hrky)
             call initfft(nz, zfactors, ztrig)
 
             !Define x wavenumbers:
@@ -63,7 +65,7 @@ module sta3dfft
             rky(nwy+1) = hrky(ny)
 
             !Define z wavenumbers:
-            call init_deriv(nz, ellz,r kz)
+            call init_deriv(nz, extent(3), rkz)
 
             !Define filter:
 
@@ -112,7 +114,8 @@ module sta3dfft
         !fp is generally non-zero at the z boundaries (so a cosine
         !transform is used in z).
         !*** fp is destroyed upon exit ***
-        subroutine fftczp2s(fp, fs)
+        subroutine fftczp2s(fp, fs, nx, ny, nz)
+            integer,          intent(in)    :: nx, ny, nz
             double precision, intent(inout) :: fp(0:nz, ny, nx)  !Physical
             double precision, intent(out)   :: fs(0:nz, nx, ny)  !Spectral
             integer                         :: kx, ky, iy
@@ -145,7 +148,8 @@ module sta3dfft
         !fp is generally non-zero at the z boundaries (so a cosine
         !transform is used in z).
         !*** fs is destroyed upon exit ***
-        subroutine fftczs2p(fs, fp)
+        subroutine fftczs2p(fs, fp, nx, ny, nz)
+            integer,          intent(in)    :: nx, ny, nz
             double precision, intent(inout) :: fs(0:nz, nx, ny)  !Spectral
             double precision, intent(out)   :: fp(0:nz, ny, nx)  !Physical
             integer                         :: ix, iy, kx

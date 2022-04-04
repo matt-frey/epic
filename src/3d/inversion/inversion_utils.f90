@@ -3,6 +3,7 @@ module inversion_utils
     use parameters, only : nx, ny, nz, dx, dxi, extent
     use stafft
     use sta2dfft
+    use sta3dfft, only : init3dfft
     implicit none
 
     private
@@ -103,6 +104,8 @@ module inversion_utils
             !----------------------------------------------------------------------
             ! Initialise FFTs and wavenumber arrays:
             call init2dfft(nx, ny, extent(1), extent(2), xfactors, yfactors, xtrig, ytrig, hrkx, hrky)
+
+            call init3dfft(nx, ny, nz, extent)
 
             !Define x wavenumbers:
             rkx(1) = zero
