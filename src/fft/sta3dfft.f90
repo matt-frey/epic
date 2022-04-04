@@ -15,6 +15,9 @@ module sta3dfft
     double precision, allocatable :: xtrig(:), ytrig(:), ztrig(:)
     integer                       :: xfactors(5), yfactors(5), zfactors(5)
 
+    private :: xtrig, ytrig, ztrig, xfactors, yfactors, zfactors,   &
+               rkx, hrkx, rky, hrky, rkz
+
     contains
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
