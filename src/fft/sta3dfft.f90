@@ -26,7 +26,7 @@ module sta3dfft
             integer          :: nwx, nwy, kx, ky, kz
 
             if (.not. allocated(filt)) then
-                allocate(filt(0:nz,nx,ny))
+                allocate(filt(0:nz, nx, ny))
                 allocate(rkx(nx))
                 allocate(hrkx(nx))
                 allocate(rky(ny))
@@ -112,10 +112,10 @@ module sta3dfft
         !fp is generally non-zero at the z boundaries (so a cosine
         !transform is used in z).
         !*** fp is destroyed upon exit ***
-        subroutine fftczp2s(fp,fs)
-            double precision:: fp(0:nz,ny,nx)  !Physical
-            double precision:: fs(0:nz,nx,ny)  !Spectral
-            integer:: kx,ky,iy
+        subroutine fftczp2s(fp, fs)
+            double precision, intent(inout) :: fp(0:nz, ny, nx)  !Physical
+            double precision, intent(out)   :: fs(0:nz, nx, ny)  !Spectral
+            integer                         :: kx, ky, iy
 
             !Carry out a full x transform first:
             call forfft((nz+1)*ny, nx, fp, xtrig, xfactors)
@@ -145,7 +145,7 @@ module sta3dfft
         !fp is generally non-zero at the z boundaries (so a cosine
         !transform is used in z).
         !*** fs is destroyed upon exit ***
-        subroutine fftczs2p(fs,fp)
+        subroutine fftczs2p(fs, fp)
             double precision, intent(inout) :: fs(0:nz, nx, ny)  !Spectral
             double precision, intent(out)   :: fp(0:nz, ny, nx)  !Physical
             integer                         :: ix, iy, kx
