@@ -95,6 +95,7 @@ module sta3dfft
 !             write(*,*) ' Enter k_c/k_max:'
 !             read(*,*) kc
 
+            kc = 0.3d0  !FIXME
             kc = kc * kmax
             cfilt = -one / kc**2
 
