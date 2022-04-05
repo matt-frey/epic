@@ -3,7 +3,7 @@ module inversion_utils
     use parameters, only : nx, ny, nz, dx, dxi, extent
     use stafft
     use sta2dfft
-    use sta3dfft, only : init3dfft
+    use sta3dfft, only : init3dfft, ztrig, zfactors, filt
     implicit none
 
     private
@@ -52,7 +52,8 @@ module inversion_utils
             , yfactors  &
             , xtrig     &
             , ytrig     &
-            , k2l2i
+            , k2l2i     &
+            , apply_filter
 
     contains
 
@@ -195,6 +196,29 @@ module inversion_utils
             deallocate(ksq)
         end subroutine
 
+        !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+        subroutine apply_filter(fs)
+            double precision, intent(inout) :: fs(0:nz, nx, ny)
+            integer                         :: kx, ky
+
+            !Carry out z FFT for each kx and ky:
+            do ky = 1, ny
+                do kx = 1, nx
+                    call dct(1, nz, fs(:, kx, ky), ztrig, zfactors)
+                enddo
+            enddo
+
+            fs = filt * fs
+
+            !Carry out z FFT for each kx and ky:
+            do ky = 1, ny
+                do kx = 1, nx
+                    call dct(1, nz, fs(:, kx, ky), ztrig, zfactors)
+                enddo
+            enddo
+
+        end subroutine apply_filter
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 

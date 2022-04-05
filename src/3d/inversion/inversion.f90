@@ -4,7 +4,6 @@ module inversion_mod
     use constants, only : zero, two, f12
     use physics, only : f_cor, ft_cor
     use timer, only : start_timer, stop_timer
-    use sta3dfft, only : filt, fftczp2s, fftczs2p
     implicit none
 
     integer :: vor2vel_timer,   &
@@ -38,16 +37,16 @@ module inversion_mod
             velog = vortg
 
             !------------------------------------------------------------------
-            !Convert vorticity to spectral space as (as, bs, cs): (velog is overwritten in this operation)
-            call fftczp2s(velog(0:nz, :, :, 1), as, nx, ny, nz)
-            call fftczp2s(velog(0:nz, :, :, 2), bs, nx, ny, nz)
-            call fftczp2s(velog(0:nz, :, :, 3), cs, nx, ny, nz)
+            !Convert vorticity to semi-spectral space as (as, bs, cs): (velog is overwritten in this operation)
+            call fftxyp2s(velog(0:nz, :, :, 1), as)
+            call fftxyp2s(velog(0:nz, :, :, 2), bs)
+            call fftxyp2s(velog(0:nz, :, :, 3), cs)
 
             !-------------------------------------------------------------
             ! Apply filter in 3D spectral space:
-            as = filt * as
-            bs = filt * bs
-            cs = filt * cs
+            call apply_filter(as)
+            call apply_filter(bs)
+            call apply_filter(cs)
 
             !Define horizontally-averaged flow by integrating horizontal vorticity:
             ubar(0) = zero
@@ -99,7 +98,7 @@ module inversion_mod
             svelog(:, :, :, 1) = as
 
             !Get u in physical space:
-            call fftczs2p(as, velog(0:nz, :, :, 1), nx, ny, nz)
+            call fftxys2p(as, velog(0:nz, :, :, 1))
 
             !Find y velocity component \hat{v}:
             call diffy(es, as)
@@ -117,12 +116,12 @@ module inversion_mod
             svelog(:, :, :, 2) = as
 
             !Get v in physical space:
-            call fftczs2p(as, velog(0:nz, :, :, 2), nx, ny, nz)
+            call fftxys2p(as, velog(0:nz, :, :, 2))
 
             svelog(:, :, :, 3) = ds
 
             !Get w in physical space:
-            call fftczs2p(ds, velog(0:nz, :, :, 3), nx, ny, nz)
+            call fftxys2p(ds, velog(0:nz, :, :, 3))
 
             ! compute the velocity gradient tensor
             call vel2vgrad(svelog, velgradg)

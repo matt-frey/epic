@@ -15,7 +15,7 @@ module sta3dfft
     double precision, allocatable :: xtrig(:), ytrig(:), ztrig(:)
     integer                       :: xfactors(5), yfactors(5), zfactors(5)
 
-    private :: xtrig, ytrig, ztrig, xfactors, yfactors, zfactors,   &
+    private :: xtrig, ytrig, xfactors, yfactors,   &
                rkx, hrkx, rky, hrky, rkz
 
     contains
@@ -95,7 +95,7 @@ module sta3dfft
 !             write(*,*) ' Enter k_c/k_max:'
 !             read(*,*) kc
 
-            kc = 0.3d0  !FIXME
+            kc = 0.2d0  !FIXME
             kc = kc * kmax
             cfilt = -one / kc**2
 
