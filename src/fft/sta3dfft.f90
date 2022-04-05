@@ -24,7 +24,7 @@ module sta3dfft
         subroutine init3dfft(nx, ny, nz, extent)
             integer,          intent(in) :: nx, ny, nz
             double precision, intent(in) :: extent(3)
-            double precision             :: cfilt, kmax, kc
+            double precision             :: kmax, kc !cfilt,
             integer                      :: nwx, nwy, kx, ky, kz
 
             if (.not. allocated(filt)) then
@@ -95,17 +95,25 @@ module sta3dfft
 !             write(*,*) ' Enter k_c/k_max:'
 !             read(*,*) kc
 
-            kc = 0.4d0  !FIXME
+            kc =  0.827133988d0 !2.0d0/3.0d0 !0.389d0  !FIXME
             kc = kc * kmax
-            cfilt = -one / kc**2
+!             cfilt = -one / kc**2
 
+            print *, "kmax = ", kmax
+            print *, "kc * kmax = ", kc
+
+             filt = 0.0d0
             do ky = 1, ny
                 do kx = 1, nx
                     do kz = 0, nz
-                        filt(kz, kx, ky) = dexp(cfilt * filt(kz, kx, ky))
+                        if (filt(kz, kx, ky) < kc ** 2) then
+                             filt(kz, kx, ky) = 1.0d0
+                         endif
+!                          filt(kz, kx, ky) = dexp(cfilt * filt(kz, kx, ky))
                     enddo
                 enddo
             enddo
+!             print *, "max. cfilt*filt", maxval(filt * filt)
         end subroutine
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
