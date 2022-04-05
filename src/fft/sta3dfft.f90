@@ -39,8 +39,8 @@ module sta3dfft
                 allocate(ztrig(2*nz))
             endif
 
-            nwx = int(f12 * nx)
-            nwy = int(f12 * ny)
+            nwx = nx / 2
+            nwy = ny / 2
 
             !----------------------------------------------------------
             ! Set up FFTs:
@@ -95,7 +95,7 @@ module sta3dfft
 !             write(*,*) ' Enter k_c/k_max:'
 !             read(*,*) kc
 
-            kc = 0.2d0  !FIXME
+            kc = 0.4d0  !FIXME
             kc = kc * kmax
             cfilt = -one / kc**2
 
