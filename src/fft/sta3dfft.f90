@@ -15,6 +15,9 @@ module sta3dfft
     double precision, allocatable :: xtrig(:), ytrig(:), ztrig(:)
     integer                       :: xfactors(5), yfactors(5), zfactors(5)
 
+
+    double precision, allocatable :: skx(:), sky(:), skz(:)
+
     private :: xtrig, ytrig, xfactors, yfactors,   &
                rkx, hrkx, rky, hrky, rkz
 
@@ -24,7 +27,8 @@ module sta3dfft
         subroutine init3dfft(nx, ny, nz, extent)
             integer,          intent(in) :: nx, ny, nz
             double precision, intent(in) :: extent(3)
-            double precision             :: kmax, kc !cfilt,
+            double precision             :: kxmaxi, kymaxi, kzmaxi
+!             double precision             :: kmax, kc !cfilt,
             integer                      :: nwx, nwy, kx, ky, kz
 
             if (.not. allocated(filt)) then
@@ -37,6 +41,9 @@ module sta3dfft
                 allocate(xtrig(2*nx))
                 allocate(ytrig(2*ny))
                 allocate(ztrig(2*nz))
+                allocate(skx(nx))
+                allocate(sky(ny))
+                allocate(skz(0:nz))
             endif
 
             nwx = nx / 2
@@ -67,53 +74,71 @@ module sta3dfft
             !Define z wavenumbers:
             call init_deriv(nz, extent(3), rkz)
 
-            !Define filter:
 
-            !kz > 0:
-            do ky = 1, ny
-                do kx = 1, nx
-                    do kz = 1, nz
-                        filt(kz, kx, ky) = rkx(kx)**2 + rky(ky)**2 + rkz(kz)**2
-                    enddo
-                enddo
-            enddo
-
-            !kz = 0:
-            do ky = 1, ny
-                do kx = 1, nx
-                    filt(0, kx, ky) = rkx(kx)**2 + rky(ky)**2
-                enddo
-            enddo
-
-            kmax = dsqrt(maxval(filt))
-!             write(*,*)
-!             write(*,'(a,f9.3)') '  Note, kx_max = ',rkx(nwx+1)
-!             write(*,'(a,f9.3)') '        ky_max = ',rky(nwy+1)
-!             write(*,'(a,f9.3)') '        kz_max = ',rkz(nz)
-!             write(*,'(a,f9.3)') '   and  k_max = ',kmax
-!             write(*,*)
-!             write(*,*) ' Enter k_c/k_max:'
-!             read(*,*) kc
-
-            kc =  0.827133988d0 !2.0d0/3.0d0 !0.389d0  !FIXME
-            kc = kc * kmax
-!             cfilt = -one / kc**2
-
-            print *, "kmax = ", kmax
-            print *, "kc * kmax = ", kc
-
-             filt = 0.0d0
+            !----------------------------------------------------------
+            !Define Hou and Li filter:
+            kxmaxi = one / maxval(rkx)
+            skx = -36.d0 * (kxmaxi * rkx) ** 36
+            kymaxi = one/maxval(rky)
+            sky = -36.d0 * (kymaxi * rky) ** 36
+            kzmaxi = one / maxval(rkz)
+            skz(0) = zero
+            skz(1:nz)=-36.d0 * (kzmaxi * rkz) ** 36
             do ky = 1, ny
                 do kx = 1, nx
                     do kz = 0, nz
-                        if (filt(kz, kx, ky) < kc ** 2) then
-                             filt(kz, kx, ky) = 1.0d0
-                         endif
-!                          filt(kz, kx, ky) = dexp(cfilt * filt(kz, kx, ky))
+                        filt(kz, kx, ky) = dexp(skx(kx) + sky(ky) + skz(kz))
                     enddo
                 enddo
             enddo
-!             print *, "max. cfilt*filt", maxval(filt * filt)
+
+!             !Define filter:
+!
+!             !kz > 0:
+!             do ky = 1, ny
+!                 do kx = 1, nx
+!                     do kz = 1, nz
+!                         filt(kz, kx, ky) = rkx(kx)**2 + rky(ky)**2 + rkz(kz)**2
+!                     enddo
+!                 enddo
+!             enddo
+!
+!             !kz = 0:
+!             do ky = 1, ny
+!                 do kx = 1, nx
+!                     filt(0, kx, ky) = rkx(kx)**2 + rky(ky)**2
+!                 enddo
+!             enddo
+!
+!             kmax = dsqrt(maxval(filt))
+! !             write(*,*)
+! !             write(*,'(a,f9.3)') '  Note, kx_max = ',rkx(nwx+1)
+! !             write(*,'(a,f9.3)') '        ky_max = ',rky(nwy+1)
+! !             write(*,'(a,f9.3)') '        kz_max = ',rkz(nz)
+! !             write(*,'(a,f9.3)') '   and  k_max = ',kmax
+! !             write(*,*)
+! !             write(*,*) ' Enter k_c/k_max:'
+! !             read(*,*) kc
+!
+!             kc =  0.827133988d0 !2.0d0/3.0d0 !0.389d0  !FIXME
+!             kc = kc * kmax
+! !             cfilt = -one / kc**2
+!
+!             print *, "kmax = ", kmax
+!             print *, "kc * kmax = ", kc
+!
+!              filt = 0.0d0
+!             do ky = 1, ny
+!                 do kx = 1, nx
+!                     do kz = 0, nz
+!                         if (filt(kz, kx, ky) < kc ** 2) then
+!                              filt(kz, kx, ky) = 1.0d0
+!                          endif
+! !                          filt(kz, kx, ky) = dexp(cfilt * filt(kz, kx, ky))
+!                     enddo
+!                 enddo
+!             enddo
+! !             print *, "max. cfilt*filt", maxval(filt * filt)
         end subroutine
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
