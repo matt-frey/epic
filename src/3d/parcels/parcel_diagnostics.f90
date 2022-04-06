@@ -25,8 +25,14 @@ module parcel_diagnostics
     ! avg_vol : mean volume over all parcels
     ! std_lam : standard deviation of aspect ratio
     ! std_vol : standard deviation of volume
+    ! min_lam : minimum aspect ratio over all parcels
+    ! max_lam : maximum aspect ratio over all parcels
+    ! min_vol : minimum volume over all parcels
+    ! max_vol : maximum volume over all parcels
     double precision :: avg_lam, avg_vol
     double precision :: std_lam, std_vol
+    double precision :: min_lam, min_vol
+    double precision :: max_lam, max_vol
 
     ! rms vorticity
     double precision :: rms_zeta(3)
@@ -89,10 +95,16 @@ module parcel_diagnostics
             avg_vol = zero
             std_lam = zero
             std_vol = zero
+            min_lam = huge(zero)   ! for huge, cf. https://gcc.gnu.org/onlinedocs/gfortran/HUGE.html
+            max_lam = zero
+            min_vol = huge(zero)
+            max_vol = zero
 
             !$omp parallel default(shared)
             !$omp do private(n, vel, vol, b, z, evals, lam) &
-            !$omp& reduction(+: ke, pe, lsum, l2sum, vsum, v2sum, n_small, rms_zeta)
+            !$omp& reduction(+: ke, pe, lsum, l2sum, vsum, v2sum, n_small, rms_zeta) &
+            !$omp& reduction(min:min_lam, min_vol) &
+            !$omp& reduction(max:max_lam, max_vol)
             do n = 1, n_parcels
 
                 vel = velocity(:, n)
@@ -118,6 +130,23 @@ module parcel_diagnostics
                 if (vol <= vmin) then
                     n_small = n_small + 1
                 endif
+
+                if (lam < min_lam) then
+                    min_lam = lam
+                endif
+
+                if (lam > max_lam) then
+                    max_lam = lam
+                endif
+
+                if (vol < min_vol) then
+                    min_vol = vol
+                endif
+
+                if (vol > max_vol) then
+                    max_vol = vol
+                endif
+
 
                 rms_zeta = rms_zeta + vol * parcels%vorticity(:, n) ** 2
 
