@@ -23,7 +23,10 @@ module field_diagnostics
                         max_dvdz,   &       ! maximum strain dv/dz value in magnitude
                         max_dwdx,   &       ! maximum strain dw/dx value in magnitude
                         max_dwdy,   &       ! maximum strain dw/dy value in magnitude
-                        max_dwdz            ! maximum strain dw/dz value in magnitude
+                        max_dwdz,   &       ! maximum strain dw/dz value in magnitude
+                        max_xvortg, &       ! maximum x-vorticity value in magnitude
+                        max_yvortg, &       ! maximum y-vorticity value in magnitude
+                        max_zvortg          ! maximum z-vorticity value in magnitude
     contains
 
         subroutine calculate_field_diagnostics
@@ -54,6 +57,10 @@ module field_diagnostics
             max_dwdx = maxval(abs(velgradg(0:nz, :, :, 4)))
             max_dwdy = maxval(abs(velgradg(0:nz, :, :, 5)))
             max_dwdz = maxval(abs(velgradg(0:nz, :, :, 1) + velgradg(0:nz, :, :, 3)))
+
+            max_xvortg = maxval(abs(vortg(0:nz, :, :, 1)))
+            max_yvortg = maxval(abs(vortg(0:nz, :, :, 2)))
+            max_zvortg = maxval(abs(vortg(0:nz, :, :, 3)))
 
 
             call stop_timer(field_stats_timer)

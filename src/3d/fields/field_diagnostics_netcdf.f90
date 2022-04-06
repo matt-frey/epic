@@ -23,7 +23,8 @@ module field_diagnostics_netcdf
                           avg_npar_id, avg_nspar_id,                       &
                           max_dudx_id, max_dudy_id, max_dudz_id,           &
                           max_dvdx_id, max_dvdy_id, max_dvdz_id,           &
-                          max_dwdx_id, max_dwdy_id, max_dwdz_id
+                          max_dwdx_id, max_dwdy_id, max_dwdz_id,           &
+                          max_xvortg_id, max_yvortg_id, max_zvortg_id
     double precision   :: restart_time
 
     integer :: field_stats_io_timer
@@ -227,6 +228,36 @@ module field_diagnostics_netcdf
                 dimids=(/t_dim_id/),                                        &
                 varid=max_dwdz_id)
 
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_xvortg',                                          &
+                long_name='largest x-vorticity value in magnitude',         &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_xvortg_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_yvortg',                                          &
+                long_name='largest y-vorticity value in magnitude',         &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_yvortg_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_zvortg',                                          &
+                long_name='largest z-vorticity value in magnitude',         &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_zvortg_id)
+
 
             call close_definition(ncid)
 
@@ -269,6 +300,12 @@ module field_diagnostics_netcdf
 
             call get_var_id(ncid, 'max_dwdz', max_dwdz_id)
 
+            call get_var_id(ncid, 'max_xvortg', max_xvortg_id)
+
+            call get_var_id(ncid, 'max_yvortg', max_yvortg_id)
+
+            call get_var_id(ncid, 'max_zvortg', max_zvortg_id)
+
         end subroutine read_netcdf_field_stats_content
 
         ! Write a step in the field diagnostic file.
@@ -307,6 +344,9 @@ module field_diagnostics_netcdf
             call write_netcdf_scalar(ncid, max_dwdx_id, max_dwdx, n_writes)
             call write_netcdf_scalar(ncid, max_dwdy_id, max_dwdy, n_writes)
             call write_netcdf_scalar(ncid, max_dwdz_id, max_dwdz, n_writes)
+            call write_netcdf_scalar(ncid, max_xvortg_id, max_xvortg, n_writes)
+            call write_netcdf_scalar(ncid, max_yvortg_id, max_yvortg, n_writes)
+            call write_netcdf_scalar(ncid, max_zvortg_id, max_zvortg, n_writes)
 
             ! increment counter
             n_writes = n_writes + 1
