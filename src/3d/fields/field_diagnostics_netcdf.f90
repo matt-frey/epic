@@ -20,7 +20,10 @@ module field_diagnostics_netcdf
     integer            :: ncid
     integer            :: t_axis_id, t_dim_id, n_writes,                   &
                           rms_v_id, abserr_v_id, max_npar_id, min_npar_id, &
-                          avg_npar_id, avg_nspar_id
+                          avg_npar_id, avg_nspar_id,                       &
+                          max_dudx_id, max_dudy_id, max_dudz_id,           &
+                          max_dvdx_id, max_dvdy_id, max_dvdz_id,           &
+                          max_dwdx_id, max_dwdy_id, max_dwdz_id
     double precision   :: restart_time
 
     integer :: field_stats_io_timer
@@ -134,6 +137,97 @@ module field_diagnostics_netcdf
                 dimids=(/t_dim_id/),                                        &
                 varid=avg_nspar_id)
 
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dudx',                                            &
+                long_name='largest du/dx value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dudx_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dudy',                                            &
+                long_name='largest du/dy value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dudy_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dudz',                                            &
+                long_name='largest du/dz value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dudz_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dvdx',                                            &
+                long_name='largest dv/dx value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dvdx_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dvdy',                                            &
+                long_name='largest dv/dy value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dvdy_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dvdz',                                            &
+                long_name='largest dv/dz value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dvdz_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dwdx',                                            &
+                long_name='largest dw/dx value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dwdx_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dwdy',                                            &
+                long_name='largest dw/dy value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dwdy_id)
+
+            call define_netcdf_dataset(                                     &
+                ncid=ncid,                                                  &
+                name='max_dwdz',                                            &
+                long_name='largest dw/dz value in magnitude',               &
+                std_name='',                                                &
+                unit='1/s',                                                 &
+                dtype=NF90_DOUBLE,                                          &
+                dimids=(/t_dim_id/),                                        &
+                varid=max_dwdz_id)
+
+
             call close_definition(ncid)
 
         end subroutine create_netcdf_field_stats_file
@@ -156,6 +250,24 @@ module field_diagnostics_netcdf
             call get_var_id(ncid, 'avg_npar', avg_npar_id)
 
             call get_var_id(ncid, 'avg_nspar', avg_nspar_id)
+
+            call get_var_id(ncid, 'max_dudx', max_dudx_id)
+
+            call get_var_id(ncid, 'max_dudy', max_dudy_id)
+
+            call get_var_id(ncid, 'max_dudz', max_dudz_id)
+
+            call get_var_id(ncid, 'max_dvdx', max_dvdx_id)
+
+            call get_var_id(ncid, 'max_dvdy', max_dvdy_id)
+
+            call get_var_id(ncid, 'max_dvdz', max_dvdz_id)
+
+            call get_var_id(ncid, 'max_dwdx', max_dwdx_id)
+
+            call get_var_id(ncid, 'max_dwdy', max_dwdy_id)
+
+            call get_var_id(ncid, 'max_dwdz', max_dwdz_id)
 
         end subroutine read_netcdf_field_stats_content
 
@@ -186,6 +298,15 @@ module field_diagnostics_netcdf
             call write_netcdf_scalar(ncid, min_npar_id, min_npar, n_writes)
             call write_netcdf_scalar(ncid, avg_npar_id, avg_npar, n_writes)
             call write_netcdf_scalar(ncid, avg_nspar_id, avg_nspar, n_writes)
+            call write_netcdf_scalar(ncid, max_dudx_id, max_dudx, n_writes)
+            call write_netcdf_scalar(ncid, max_dudy_id, max_dudy, n_writes)
+            call write_netcdf_scalar(ncid, max_dudz_id, max_dudz, n_writes)
+            call write_netcdf_scalar(ncid, max_dvdx_id, max_dvdx, n_writes)
+            call write_netcdf_scalar(ncid, max_dvdy_id, max_dvdy, n_writes)
+            call write_netcdf_scalar(ncid, max_dvdz_id, max_dvdz, n_writes)
+            call write_netcdf_scalar(ncid, max_dwdx_id, max_dwdx, n_writes)
+            call write_netcdf_scalar(ncid, max_dwdy_id, max_dwdy, n_writes)
+            call write_netcdf_scalar(ncid, max_dwdz_id, max_dwdz, n_writes)
 
             ! increment counter
             n_writes = n_writes + 1
