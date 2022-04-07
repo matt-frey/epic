@@ -2,7 +2,7 @@
 !                               Parcel diagnostics
 ! =============================================================================
 module parcel_diagnostics
-    use constants, only : zero, one, f12
+    use constants, only : zero, one, f12, pi
     use merge_sort
     use parameters, only : extent, lower, vcell, vmin, nx, nz
     use parcel_container, only : parcels, n_parcels
@@ -33,6 +33,8 @@ module parcel_diagnostics
     double precision :: std_lam, std_vol
     double precision :: min_lam, min_vol
     double precision :: max_lam, max_vol
+
+    double precision :: sum_vol
 
     ! rms vorticity
     double precision :: rms_zeta(3)
@@ -72,7 +74,7 @@ module parcel_diagnostics
             double precision :: velocity(:, :)
             integer          :: n
             double precision :: b, z, vel(3), vol, zmin
-            double precision :: evals(3), lam, lsum, l2sum, vsum, v2sum
+            double precision :: evals(3), lam, lsum, l2sum, v2sum
 
             call start_timer(parcel_stats_timer)
 
@@ -82,7 +84,6 @@ module parcel_diagnostics
 
             lsum = zero
             l2sum = zero
-            vsum = zero
             v2sum = zero
 
             rms_zeta = zero
@@ -99,10 +100,11 @@ module parcel_diagnostics
             max_lam = zero
             min_vol = huge(zero)
             max_vol = zero
+            sum_vol = zero
 
             !$omp parallel default(shared)
             !$omp do private(n, vel, vol, b, z, evals, lam) &
-            !$omp& reduction(+: ke, pe, lsum, l2sum, vsum, v2sum, n_small, rms_zeta) &
+            !$omp& reduction(+: ke, pe, lsum, l2sum, sum_vol, v2sum, n_small, rms_zeta) &
             !$omp& reduction(min:min_lam, min_vol) &
             !$omp& reduction(max:max_lam, max_vol)
             do n = 1, n_parcels
@@ -124,7 +126,7 @@ module parcel_diagnostics
                 lsum = lsum + lam
                 l2sum = l2sum + lam ** 2
 
-                vsum = vsum + vol
+                sum_vol = sum_vol + vol
                 v2sum = v2sum + vol ** 2
 
                 if (vol <= vmin) then
@@ -147,7 +149,14 @@ module parcel_diagnostics
                     max_vol = vol
                 endif
 
-
+#ifndef NDEBUG
+                !$omp critical
+                if (abs(get_determinant(parcels%B(:, n), vol) - get_abc(vol) ** 2) > epsilon(zero)) then
+                    print *, "Parcel determinant not preserved!"
+                    stop
+                endif
+                !$omp end critical
+#endif
                 rms_zeta = rms_zeta + vol * parcels%vorticity(:, n) ** 2
 
             enddo
@@ -160,9 +169,9 @@ module parcel_diagnostics
             avg_lam = lsum / dble(n_parcels)
             std_lam = dsqrt(abs(l2sum / dble(n_parcels) - avg_lam ** 2))
 
-            rms_zeta = dsqrt(rms_zeta / vsum)
+            rms_zeta = dsqrt(rms_zeta / sum_vol)
 
-            avg_vol = vsum / dble(n_parcels)
+            avg_vol = sum_vol / dble(n_parcels)
             std_vol = dsqrt(abs(v2sum / dble(n_parcels) - avg_vol ** 2))
 
             call stop_timer(parcel_stats_timer)
