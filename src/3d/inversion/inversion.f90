@@ -1,6 +1,6 @@
 module inversion_mod
     use inversion_utils
-    use parameters, only : nx, ny, nz, dxi
+    use parameters, only : nx, ny, nz, dxi, ngridi
     use physics, only : f_cor
     use constants, only : zero, two, f12
     use timer, only : start_timer, stop_timer
@@ -222,6 +222,11 @@ module inversion_mod
             f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 3)
 
             call divergence(f, vtend(0:nz, :, :, 3))
+
+            ! remove mean vorticity tendency
+            vtend(0:nz, :, :, 1) = vtend(0:nz, :, :, 1) - sum(vtend(0:nz, :, :, 1)) * ngridi
+            vtend(0:nz, :, :, 2) = vtend(0:nz, :, :, 2) - sum(vtend(0:nz, :, :, 2)) * ngridi
+            vtend(0:nz, :, :, 3) = vtend(0:nz, :, :, 3) - sum(vtend(0:nz, :, :, 3)) * ngridi
 
             ! Extrapolate to halo grid points
             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
