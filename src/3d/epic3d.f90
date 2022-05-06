@@ -11,8 +11,11 @@ program epic3d
     use parcel_nearest, only : merge_nearest_timer, merge_tree_resolve_timer
     use parcel_correction, only : apply_laplace,          &
                                   apply_gradient,         &
+                                  apply_vortcor,          &
                                   lapl_corr_timer,        &
-                                  grad_corr_timer
+                                  grad_corr_timer,        &
+                                  vort_corr_timer,        &
+                                  init_parcel_correction
     use parcel_diagnostics, only : init_parcel_diagnostics, &
                                    parcel_stats_timer
     use parcel_netcdf, only : parcel_io_timer, read_netcdf_parcels
@@ -21,7 +24,7 @@ program epic3d
     use field_netcdf, only : field_io_timer
     use field_diagnostics, only : field_stats_timer
     use field_diagnostics_netcdf, only : field_stats_io_timer
-    use inversion_mod, only : vor2vel_timer, db_timer
+    use inversion_mod, only : vor2vel_timer, vtend_timer
     use inversion_utils, only : init_fft
     use parcel_interpl, only : grid2par_timer, par2grid_timer
     use parcel_init, only : init_parcels, init_timer
@@ -64,6 +67,7 @@ program epic3d
             call register_timer('parcel merge', merge_timer)
             call register_timer('laplace correction', lapl_corr_timer)
             call register_timer('gradient correction', grad_corr_timer)
+            call register_timer('net vorticity correction', vort_corr_timer)
             call register_timer('parcel initialisation', init_timer)
             call register_timer('parcel diagnostics', parcel_stats_timer)
             call register_timer('parcel I/O', parcel_io_timer)
@@ -72,7 +76,7 @@ program epic3d
             call register_timer('field diagnostics', field_stats_timer)
             call register_timer('field diagnostics I/O', field_stats_io_timer)
             call register_timer('vor2vel', vor2vel_timer)
-            call register_timer('buoyancy derivatives', db_timer)
+            call register_timer('vorticity tendency', vtend_timer)
             call register_timer('parcel push', rk4_timer)
             call register_timer('merge nearest', merge_nearest_timer)
             call register_timer('merge tree resolve', merge_tree_resolve_timer)
@@ -117,6 +121,8 @@ program epic3d
                 call init_parcel_diagnostics
             endif
 
+            call init_parcel_correction
+
             call field_default
 
             call setup_output_files
@@ -142,6 +148,8 @@ program epic3d
                 endif
 #endif
                 call ls_rk4_step(t)
+
+                call apply_vortcor
 
                 call merge_parcels(parcels)
 

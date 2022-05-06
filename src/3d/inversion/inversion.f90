@@ -1,12 +1,13 @@
 module inversion_mod
     use inversion_utils
-    use parameters, only : nx, ny, nz
+    use parameters, only : nx, ny, nz, dxi
+    use physics, only : f_cor
     use constants, only : zero, two, f12
     use timer, only : start_timer, stop_timer
     implicit none
 
     integer :: vor2vel_timer,   &
-               db_timer
+               vtend_timer
 
     contains
 
@@ -14,7 +15,8 @@ module inversion_mod
 
         ! Given the vorticity vector field (vortg) in physical space, this
         ! returns the associated velocity field (velog) and the velocity
-        ! gradient tensor (velgradg).
+        ! gradient tensor (velgradg).  Note: the
+        ! vorticity is modified to be solenoidal and spectrally filtered.
         subroutine vor2vel(vortg,  velog,  velgradg)
             double precision, intent(in)    :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(out)   :: velog(-1:nz+1, 0:ny-1, 0:nx-1, 3)
@@ -25,7 +27,6 @@ module inversion_mod
                                              , cs(0:nz, 0:nx-1, 0:ny-1)
             double precision                :: ds(0:nz, 0:nx-1, 0:ny-1) &
                                              , es(0:nz, 0:nx-1, 0:ny-1)
-            double precision                :: dstop(0:nx-1, 0:ny-1), dsbot(0:nx-1, 0:ny-1)
             double precision                :: ubar(0:nz), vbar(0:nz)
             double precision                :: uavg, vavg
             integer                         :: iz
@@ -37,10 +38,23 @@ module inversion_mod
             velog = vortg
 
             !------------------------------------------------------------------
-            !Convert vorticity to spectral space as (as, bs, cs): (velog is overwritten in this operation)
+            !Convert vorticity to semi-spectral space as (as, bs, cs): (velog is overwritten in this operation)
             call fftxyp2s(velog(0:nz, :, :, 1), as)
             call fftxyp2s(velog(0:nz, :, :, 2), bs)
             call fftxyp2s(velog(0:nz, :, :, 3), cs)
+
+            !-------------------------------------------------------------
+            ! Apply 2D Hou and Li filter:
+            !$omp parallel shared(as, bs, cs, filt, nz) private(iz) default(none)
+            !$omp do
+            do iz = 0, nz
+                as(iz, :, :) = filt * as(iz, :, :)
+                bs(iz, :, :) = filt * bs(iz, :, :)
+                cs(iz, :, :) = filt * cs(iz, :, :)
+            enddo
+            !$omp end do
+            !$omp end parallel
+
 
             !Define horizontally-averaged flow by integrating horizontal vorticity:
             ubar(0) = zero
@@ -70,15 +84,11 @@ module inversion_mod
 
             !as & bs are now free to re-use
 
-            !Save boundary values for z derivative of w below:
-            dsbot = ds(0,  :, :)
-            dstop = ds(nz, :, :)
-
             !Invert to find vertical velocity \hat{w} (store in ds, spectrally):
             call lapinv0(ds)
 
             !Find \hat{w}' (store in es, spectrally):
-            call diffz0(ds, es, dsbot, dstop)
+            call diffz(ds, es)
 
             !Find x velocity component \hat{u}:
             call diffx(es, as)
@@ -184,39 +194,73 @@ module inversion_mod
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-        ! Compute the gridded buoyancy derivatives db/dx and db/dy
-        subroutine buoyancy_derivatives(tbuoyg, dbdx, dbdy)
+        ! Compute the gridded vorticity tendency:
+        subroutine vorticity_tendency(vortg, velog, tbuoyg, vtend)
+            double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+            double precision, intent(in)  :: velog(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision, intent(out) :: dbdx(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision, intent(out) :: dbdy(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision              :: b(0:nz, 0:ny-1, 0:nx-1)    ! buoyancy in physical space
-            double precision              :: bs(0:nz, 0:nx-1, 0:ny-1)   ! buoyancy in spectral space
-            double precision              :: ds(0:nz, 0:nx-1, 0:ny-1)   ! buoyancy derivative in spectral space
+            double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+            double precision              :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
 
-            call start_timer(db_timer)
+            call start_timer(vtend_timer)
 
-            ! copy buoyancy
-            b = tbuoyg(0:nz, :, :)
+            ! Eqs. 10 and 11 of MPIC paper
+            f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 1)
+            f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 1) + tbuoyg
+            f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 1)
 
-            ! Compute spectral buoyancy (bs):
-            call fftxyp2s(b, bs)
+            call divergence(f, vtend(0:nz, :, :, 1))
 
-            call diffy(bs, ds)                      ! b_y = db/dy in spectral space
-            call fftxys2p(ds, dbdy(0:nz, :, :))     ! db = b_y in physical space
+            f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 2) - tbuoyg
+            f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 2)
+            f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 2)
 
-            call diffx(bs, ds)                      ! b_x = db/dx in spectral space
-            call fftxys2p(ds, dbdx(0:nz, :, :))     ! db = b_x in physical space
+            call divergence(f, vtend(0:nz, :, :, 2))
+
+            f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 3)
+            f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 3)
+            f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 3)
+
+            call divergence(f, vtend(0:nz, :, :, 3))
 
             ! Extrapolate to halo grid points
-            dbdy(-1,   :, :) = two * dbdy(0,  :, :) - dbdy(1,    :, :)
-            dbdy(nz+1, :, :) = two * dbdy(nz, :, :) - dbdy(nz-1, :, :)
+            vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
+            vtend(nz+1, :, :, :) = two * vtend(nz, :, :, :) - vtend(nz-1, :, :, :)
 
-            dbdx(-1,   :, :) = two * dbdx(0,  :, :) - dbdx(1,    :, :)
-            dbdx(nz+1, :, :) = two * dbdx(nz, :, :) - dbdx(nz-1, :, :)
+            call stop_timer(vtend_timer)
 
-            call stop_timer(db_timer)
+        end subroutine vorticity_tendency
 
-        end subroutine buoyancy_derivatives
+        subroutine divergence(f, div)
+            double precision, intent(in)  :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+            double precision, intent(out) :: div(0:nz, 0:ny-1, 0:nx-1)
+            double precision              :: df(0:nz, 0:ny-1, 0:nx-1)
+            integer                       :: i
+
+            ! calculate df/dx with central differencing
+            do i = 1, nx-2
+                div(0:nz, 0:ny-1, i) = f12 * dxi(1) * (f(0:nz, 0:ny-1, i+1, 1) - f(0:nz, 0:ny-1, i-1, 1))
+            enddo
+            div(0:nz, 0:ny-1, 0)    = f12 * dxi(1) * (f(0:nz, 0:ny-1, 1, 1) - f(0:nz, 0:ny-1, nx-1, 1))
+            div(0:nz, 0:ny-1, nx-1) = f12 * dxi(1) * (f(0:nz, 0:ny-1, 0, 1) - f(0:nz, 0:ny-1, nx-2, 1))
+
+            ! calculate df/dy with central differencing
+            do i = 1, ny-2
+                df(0:nz, i, 0:nx-1) = f12 * dxi(2) * (f(0:nz, i+1, 0:nx-1, 2) - f(0:nz, i-1, 0:nx-1, 2))
+            enddo
+            df(0:nz, 0,    0:nx-1) = f12 * dxi(2) * (f(0:nz, 1, 0:nx-1, 2) - f(0:nz, ny-1, 0:nx-1, 2))
+            df(0:nz, ny-1, 0:nx-1) = f12 * dxi(2) * (f(0:nz, 0, 0:nx-1, 2) - f(0:nz, ny-2, 0:nx-1, 2))
+
+            div = div + df
+
+            ! calculate df/dz with central differencing
+            do i = 0, nz
+                df(i, 0:ny-1, 0:nx-1) = f12 * dxi(3) * (f(i+1, 0:ny-1, 0:nx-1, 3) - f(i-1, 0:ny-1, 0:nx-1, 3))
+            enddo
+
+            div = div + df
+
+        end subroutine divergence
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
@@ -252,7 +296,11 @@ module inversion_mod
             call fftxys2p(vs, vd)
 
             ! Compute z derivative by compact differences:
-            call diffz1(ds, ws)
+            call diffz(ds, ws)
+
+            ! Set vertical boundary values to zero
+            ws(0,  :, :) = zero
+            ws(nz, :, :) = zero
 
             ! Add on the x and y-independent part of wd:
             ws(:, 1, 1) = ws(:, 1, 1) + wbar

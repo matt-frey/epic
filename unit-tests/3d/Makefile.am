@@ -27,7 +27,9 @@ unittests_PROGRAMS = 				\
 	test_jacobi_1				\
 	test_jacobi_2				\
 	test_jacobi_3				\
+	test_jacobi_4				\
 	test_ellipsoid_split 			\
+	test_ellipsoid_split_merge		\
 	test_parcel_init_3d			\
 	test_fft_3d				\
 	test_fft_2_3d				\
@@ -42,8 +44,10 @@ unittests_PROGRAMS = 				\
 	test_free_slip_3d			\
 	test_vor2vel				\
 	test_velgradg				\
+	test_vtend				\
 	test_lapinv0_1				\
 	test_lapinv0_2				\
+	test_lapinv1				\
 	test_diffz0				\
 	test_diffz1
 
@@ -62,8 +66,14 @@ test_jacobi_2_LDADD = libcombi.la
 test_jacobi_3_SOURCES = test_jacobi_3.f90
 test_jacobi_3_LDADD = libcombi.la
 
+test_jacobi_4_SOURCES = test_jacobi_4.f90
+test_jacobi_4_LDADD = libcombi.la
+
 test_ellipsoid_split_SOURCES = test_ellipsoid_split.f90
 test_ellipsoid_split_LDADD = libcombi.la
+
+test_ellipsoid_split_merge_SOURCES = test_ellipsoid_split_merge.f90
+test_ellipsoid_split_merge_LDADD = libcombi.la
 
 test_parcel_init_3d_SOURCES = test_parcel_init_3d.f90
 test_parcel_init_3d_LDADD = libcombi.la
@@ -107,11 +117,17 @@ test_vor2vel_LDADD = libcombi.la
 test_velgradg_SOURCES = test_velgradg.f90
 test_velgradg_LDADD = libcombi.la
 
+test_vtend_SOURCES = test_vtend.f90
+test_vtend_LDADD = libcombi.la
+
 test_lapinv0_1_SOURCES = test_lapinv0_1.f90
 test_lapinv0_1_LDADD = libcombi.la
 
 test_lapinv0_2_SOURCES = test_lapinv0_2.f90
 test_lapinv0_2_LDADD = libcombi.la
+
+test_lapinv1_SOURCES = test_lapinv1.f90
+test_lapinv1_LDADD = libcombi.la
 
 test_diffz0_SOURCES = test_diffz0.f90
 test_diffz0_LDADD = libcombi.la
