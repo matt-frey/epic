@@ -100,10 +100,6 @@ module inversion_mod
             call fftxys2p(es, vortg(0:nz, :, :, 2))
             call fftxys2p(fs, vortg(0:nz, :, :, 3))
 
-            ! use symmetry to fill halo grid points
-            vortg(-1,   :, :, :) = vortg(1,    :, :, :)
-            vortg(nz+1, :, :, :) = vortg(nz-1, :, :, :)
-
             !Define horizontally-averaged flow by integrating horizontal vorticity:
             ubar(0) = zero
             vbar(0) = zero
@@ -240,66 +236,6 @@ module inversion_mod
 
         end subroutine vel2vgrad
 
-        !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-        ! Compute the gridded vorticity tendency:
-!         subroutine vorticity_tendency(vortg, velog, tbuoyg, velgradg, vtend)
-!             double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-!             double precision, intent(in)  :: velog(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-!             double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
-!             double precision, intent(in)  :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
-!             double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-!             double precision              :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-!
-!             call start_timer(vtend_timer)
-!
-!             ! Eqs. 10 and 11 of MPIC paper
-!             f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 1)
-!             f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 1) + tbuoyg
-!             f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 1)
-!
-!             call divergence(f, vtend(0:nz, :, :, 1))
-!
-!             f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 2) - tbuoyg
-!             f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 2)
-!             f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 2)
-!
-!             call divergence(f, vtend(0:nz, :, :, 2))
-!
-!             f(:, : , :, 1) = (vortg(:, :, :, 1) + f_cor(1)) * velog(:, :, :, 3)
-!             f(:, : , :, 2) = (vortg(:, :, :, 2) + f_cor(2)) * velog(:, :, :, 3)
-!             f(:, : , :, 3) = (vortg(:, :, :, 3) + f_cor(3)) * velog(:, :, :, 3)
-!
-!             call divergence(f, vtend(0:nz, :, :, 3))
-!
-!
-!             ! Fill boundary values:
-!             ! \omegax * du/dx + \omegay * dv/dx (where dv/dx = \omegaz + du/dy)
-!             vtend(0, :, :, 1) = vortg(0, :, :, 1) * velgradg(0, :, :, 1) &
-!                               + vortg(0, :, :, 2) * (vortg(0, :, :, 3 ) + velgradg(0, :, :, 2))
-!
-!             vtend(nz, :, :, 1) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 1) &
-!                                + vortg(nz, :, :, 2) * (vortg(nz, :, :, 3 ) + velgradg(nz, :, :, 2))
-!
-!             ! \omegax * du/dy + \omegay * dv/dy
-!             vtend(0, :, :, 2) = vortg(0, :, :, 1) * velgradg(0, :, :, 2) &
-!                               + vortg(0, :, :, 2) * velgradg(0, :, :, 3)
-!
-!             vtend(nz, :, :, 2) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 2) &
-!                                + vortg(nz, :, :, 2) * velgradg(nz, :, :, 3)
-!
-!             ! - \omegaz * (du/dx + dv/dy)
-!             vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
-!             vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
-!
-!             ! Extrapolate to halo grid points
-!             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
-!             vtend(nz+1, :, :, :) = two * vtend(nz, :, :, :) - vtend(nz-1, :, :, :)
-!
-!             call stop_timer(vtend_timer)
-!
-!         end subroutine vorticity_tendency
-
 
         subroutine vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
             use physics, only : f_cor
@@ -359,36 +295,6 @@ module inversion_mod
 
         end subroutine vorticity_tendency
 
-        subroutine divergence(f, div)
-            double precision, intent(in)  :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-            double precision, intent(out) :: div(0:nz, 0:ny-1, 0:nx-1)
-            double precision              :: df(0:nz, 0:ny-1, 0:nx-1)
-            integer                       :: i
-
-            ! calculate df/dx with central differencing
-            do i = 1, nx-2
-                div(0:nz, 0:ny-1, i) = f12 * dxi(1) * (f(0:nz, 0:ny-1, i+1, 1) - f(0:nz, 0:ny-1, i-1, 1))
-            enddo
-            div(0:nz, 0:ny-1, 0)    = f12 * dxi(1) * (f(0:nz, 0:ny-1, 1, 1) - f(0:nz, 0:ny-1, nx-1, 1))
-            div(0:nz, 0:ny-1, nx-1) = f12 * dxi(1) * (f(0:nz, 0:ny-1, 0, 1) - f(0:nz, 0:ny-1, nx-2, 1))
-
-            ! calculate df/dy with central differencing
-            do i = 1, ny-2
-                df(0:nz, i, 0:nx-1) = f12 * dxi(2) * (f(0:nz, i+1, 0:nx-1, 2) - f(0:nz, i-1, 0:nx-1, 2))
-            enddo
-            df(0:nz, 0,    0:nx-1) = f12 * dxi(2) * (f(0:nz, 1, 0:nx-1, 2) - f(0:nz, ny-1, 0:nx-1, 2))
-            df(0:nz, ny-1, 0:nx-1) = f12 * dxi(2) * (f(0:nz, 0, 0:nx-1, 2) - f(0:nz, ny-2, 0:nx-1, 2))
-
-            div = div + df
-
-            ! calculate df/dz with central differencing
-            do i = 0, nz
-                df(i, 0:ny-1, 0:nx-1) = f12 * dxi(3) * (f(i+1, 0:ny-1, 0:nx-1, 3) - f(i-1, 0:ny-1, 0:nx-1, 3))
-            enddo
-
-            div = div + df
-
-        end subroutine divergence
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
