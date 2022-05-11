@@ -300,9 +300,9 @@ module inversion_mod
                 vst(iz, :, :, 3) = filt * vst(iz, :, :, 3)
             enddo
 
-            call fftxys2p(vst(:, :, 1), vtend(0:nz, :, :, 1))
-            call fftxys2p(vst(:, :, 2), vtend(0:nz, :, :, 2))
-            call fftxys2p(vst(:, :, 3), vtend(0:nz, :, :, 3))
+            call fftxys2p(vst(:, :, :, 1), vtend(0:nz, :, :, 1))
+            call fftxys2p(vst(:, :, :, 2), vtend(0:nz, :, :, 2))
+            call fftxys2p(vst(:, :, :, 3), vtend(0:nz, :, :, 3))
 
             ! Extrapolate to halo grid points
             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
