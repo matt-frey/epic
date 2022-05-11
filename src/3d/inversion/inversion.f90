@@ -290,9 +290,9 @@ module inversion_mod
             vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
             vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
 
-            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, 1))
-            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, 2))
-            call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, 3))
+            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
+            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
+            call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, :, 3))
 
             do iz = 0, nz
                 vst(iz, :, :, 1) = filt * vst(iz, :, :, 1)
