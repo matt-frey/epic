@@ -339,9 +339,9 @@ module parcel_interpl
                     vgrad(:, n) = vgrad(:, n) + weights(l) * velgradg(ks(l), js(l), is(l), :)
 
                     ! x-component of vorticity tendency
-                    dvdx = vor(3) + velgradg(ks(l), js(l), is(l), 2)
+                    dvdx = vortg(ks(l), js(l), is(l), 3) + velgradg(ks(l), js(l), is(l), 2)
                     vortend(1, n) = vortend(1, n) + weights(l)                          &
-                                        * (vor(1) *  velgradg(ks(l), js(l), is(l), 1)   & ! \omegax * du/dx
+                                        * (vor(1) * velgradg(ks(l), js(l), is(l), 1)    & ! \omegax * du/dx
                                         +  vor(2) * dvdx                                & ! \omegay * dv/dx
                                         +  vor(3) * velgradg(ks(l), js(l), is(l), 4))   ! \omegaz * dw/dx
 
