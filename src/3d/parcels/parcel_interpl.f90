@@ -292,7 +292,7 @@ module parcel_interpl
             double precision,     intent(inout) :: vel(:, :), vortend(:, :), vgrad(:, :)
             logical, optional, intent(in)       :: add
             integer                             :: n, l
-            double precision :: vsum
+            double precision :: vsum, vor(3), dwdz, dvdx
 
             call start_timer(grid2par_timer)
 
@@ -320,10 +320,11 @@ module parcel_interpl
             endif
 
             !$omp parallel default(shared)
-            !$omp do private(n, l, is, js, ks, weights)
+            !$omp do private(n, l, is, js, ks, weights, vor)
             do n = 1, n_parcels
 
                 vgrad(:, n) = zero
+                vor = parcels%vorticity(:, n)
 
                 ! ensure point is within the domain
                 call apply_periodic_bc(parcels%position(:, n))
@@ -337,7 +338,25 @@ module parcel_interpl
 
                     vgrad(:, n) = vgrad(:, n) + weights(l) * velgradg(ks(l), js(l), is(l), :)
 
-                    vortend(:, n) = vortend(:, n) + weights(l) * vtend(ks(l), js(l), is(l), :)
+                    ! x-component of vorticity tendency
+                    dvdx = vor(3) + velgradg(ks(l), js(l), is(l), 2)
+                    vortend(1, n) = vortend(1, n) + weights(l)                          &
+                                        * (vor(1) *  velgradg(ks(l), js(l), is(l), 1)   & ! \omegax * du/dx
+                                        +  vor(2) * dvdx                                & ! \omegay * dv/dx
+                                        +  vor(3) * velgradg(ks(l), js(l), is(l), 4))   ! \omegaz * dw/dx
+
+                    ! y-component of vorticity tendency
+                    vortend(2, n) = vortend(2, n) + weights(l)                                 &
+                                        * (vor(1) * velgradg(ks(l), js(l), is(l), 2) & ! \omegax * du/dy
+                                        +  vor(2) * velgradg(ks(l), js(l), is(l), 3) & ! \omegay * dv/dy
+                                        +  vor(3) * velgradg(ks(l), js(l), is(l), 5))  ! \omegaz * dw/dy
+
+                    ! z-component of vorticity tendency
+                    dwdz = - (velgradg(ks(l), js(l), is(l), 1) + velgradg(ks(l), js(l), is(l), 3))
+                    vortend(3, n) = vortend(3, n) + weights(l)                       &
+                                        * (vor(1) * velgradg(ks(l), js(l), is(l), 4) & ! \omegax * dw/dx
+                                        +  vor(2) * velgradg(ks(l), js(l), is(l), 5) & ! \omegay * dw/dy
+                                        +  vor(3) * dwdz)                              ! \omegaz * dw/dz
                 enddo
             enddo
             !$omp end do

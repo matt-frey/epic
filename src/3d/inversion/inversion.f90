@@ -18,7 +18,7 @@ module inversion_mod
         ! gradient tensor (velgradg).  Note: the
         ! vorticity is modified to be solenoidal and spectrally filtered.
         subroutine vor2vel(vortg,  velog,  velgradg)
-            double precision, intent(inout) :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+            double precision, intent(in)    :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(out)   :: velog(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(out)   :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
             double precision                :: svelog(0:nz, 0:nx-1, 0:ny-1, 3)
@@ -26,79 +26,35 @@ module inversion_mod
                                              , bs(0:nz, 0:nx-1, 0:ny-1) &
                                              , cs(0:nz, 0:nx-1, 0:ny-1)
             double precision                :: ds(0:nz, 0:nx-1, 0:ny-1) &
-                                             , es(0:nz, 0:nx-1, 0:ny-1) &
-                                             , fs(0:nz, 0:nx-1, 0:ny-1)
+                                             , es(0:nz, 0:nx-1, 0:ny-1)
             double precision                :: ubar(0:nz), vbar(0:nz)
             double precision                :: uavg, vavg
             integer                         :: iz
 
             call start_timer(vor2vel_timer)
 
+            ! Copy vorticity to velocity field to perform FFT transforms
+            ! (FFT transforms overwrite the input array)
+            velog = vortg
+
             !------------------------------------------------------------------
-            !Convert vorticity to semi-spectral space as (as, bs, cs): (vortg is overwritten in this operation)
-            call fftxyp2s(vortg(0:nz, :, :, 1), as)
-            call fftxyp2s(vortg(0:nz, :, :, 2), bs)
-            call fftxyp2s(vortg(0:nz, :, :, 3), cs)
+            !Convert vorticity to semi-spectral space as (as, bs, cs): (velog is overwritten in this operation)
+            call fftxyp2s(velog(0:nz, :, :, 1), as)
+            call fftxyp2s(velog(0:nz, :, :, 2), bs)
+            call fftxyp2s(velog(0:nz, :, :, 3), cs)
 
-            !Add -grad(lambda) where Laplace(lambda) = div(vortg) to
-            !enforce the solenoidal condition on the vorticity field:
-            call diffx(as, ds)
-            call diffy(bs, es)
-            call diffz(cs, fs)
-
-            fs(0,  :, :) = zero
-            fs(nz, :, :) = zero
-
-            !Form div(vortg):
-            !$omp parallel shared(ds, es, fs, k2l2i, nz) private(iz)
-            !$omp do
-            do iz = 1, nz-1
-               fs(iz, :, :) = k2l2i * (ds(iz, :, :) + es(iz, :, :) + fs(iz, :, :))
-            enddo
-            !$omp end do
-            !$omp end parallel
-
-            !Remove horizontally-averaged part (plays no role):
-            fs(:, 0, 0) = zero
-
-            !Subtract grad(lambda) to enforce div(vortg) = 0:
-            call diffx(fs, ds)
-            !$omp parallel
-            !$omp workshare
-            as = as + ds
-            !$omp end workshare
-            !$omp end parallel
-
-            call diffy(fs, ds)
-            !$omp parallel
-            !$omp workshare
-            bs = bs + ds
-            !$omp end workshare
-            !$omp end parallel
-
-            !Compute spectrally filtered vorticity in physical space:
-            !$omp parallel shared(ds, es, fs, as, bs, cs, filt, nz) private(iz) default(none)
+            !-------------------------------------------------------------
+            ! Apply 2D Hou and Li filter:
+            !$omp parallel shared(as, bs, cs, filt, nz) private(iz) default(none)
             !$omp do
             do iz = 0, nz
-                ds(iz, :, :) = filt * as(iz, :, :)
-                es(iz, :, :) = filt * bs(iz, :, :)
-                fs(iz, :, :) = filt * cs(iz, :, :)
+                as(iz, :, :) = filt * as(iz, :, :)
+                bs(iz, :, :) = filt * bs(iz, :, :)
+                cs(iz, :, :) = filt * cs(iz, :, :)
             enddo
             !$omp end do
             !$omp end parallel
 
-            ! ==========================================================
-            as = ds
-            bs = es
-            cs = fs
-            !! IF WE KEEP THE SOLENOIDAL CORRECTION THEN REPLACE
-            !! as WITH ds ETC., IN THE SUBSEQUENT CODDE.
-            ! ==========================================================
-
-            !Return corrected vorticity to physical space:
-            call fftxys2p(ds, vortg(0:nz, :, :, 1))
-            call fftxys2p(es, vortg(0:nz, :, :, 2))
-            call fftxys2p(fs, vortg(0:nz, :, :, 3))
 
             !Define horizontally-averaged flow by integrating horizontal vorticity:
             ubar(0) = zero
@@ -237,63 +193,63 @@ module inversion_mod
         end subroutine vel2vgrad
 
 
-        subroutine vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
-            use physics, only : f_cor
-            double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-            double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision              :: b(0:nz, 0:ny-1, 0:nx-1)
-            double precision, intent(out) :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
-            double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-            double precision              :: bs(0:nz, 0:nx-1, 0:ny-1) ! spectral buoyancy
-            double precision              :: ds(0:nz, 0:nx-1, 0:ny-1) ! spectral derivatives
-            double precision              :: db(0:nz, 0:ny-1, 0:nx-1) ! buoyancy derivatives
-
-            call start_timer(vtend_timer)
-
-            ! copy buoyancy
-            b = tbuoyg(0:nz, :, :)
-
-            ! Compute spectral buoyancy (bs):
-            call fftxyp2s(b, bs)
-
-            call diffy(bs, ds)                      ! b_y = db/dy in spectral space
-            call fftxys2p(ds, db)                   ! db = b_y in physical space
-
-            !$omp parallel
-            !$omp workshare
-            vtend(0:nz, :, :, 1) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 1) & ! \omegax * du/dx
-                                 + (vortg(0:nz, :, :, 2) + f_cor(2))                         &
-                                    * (vortg(0:nz, :, :, 3) + velgradg(0:nz, :, :, 2)) & ! \omegay * dv/dx
-                                 + (vortg(0:nz, :, :, 3) + f_cor(3)) * velgradg(0:nz, :, :, 4) & ! \omegaz * dw/dx
-                                 + db                                                          ! db/dy
-            !$omp end workshare
-            !$omp end parallel
-
-            call diffx(bs, ds)                      ! b_x = db/dx in spectral space
-            call fftxys2p(ds, db)                   ! db = b_x in physical space
-
-            !$omp parallel
-            !$omp workshare
-            vtend(0:nz, :, :, 2) =  vortg(0:nz, :, :, 1)             * velgradg(0:nz, :, :, 2) & ! \omegax * du/dy
-                                 + (vortg(0:nz, :, :, 2) + f_cor(2)) * velgradg(0:nz, :, :, 3) & ! \omegay * dv/dy
-                                 + (vortg(0:nz, :, :, 3) + f_cor(3)) * velgradg(0:nz, :, :, 5) & ! \omegaz * dw/dy
-                                 - db                                                          ! dbdx
-
-            vtend(0:nz, :, :, 3) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 4) & ! \omegax * dw/dx
-                                 + (vortg(0:nz, :, :, 2) + f_cor(2)) * velgradg(0:nz, :, :, 5) & ! \omegay * dw/dy
-                                 - (vortg(0:nz, :, :, 3) + f_cor(3))  *                         &
-                                         (velgradg(0:nz, :, :, 1) + velgradg(0:nz, :, :, 3))   ! \omegaz * dw/dz
-
-            !$omp end workshare
-            !$omp end parallel
-
-            ! Extrapolate to halo grid points
-            vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
-            vtend(nz+1, :, :, :) = two * vtend(nz, :, :, :) - vtend(nz-1, :, :, :)
-
-            call stop_timer(vtend_timer)
-
-        end subroutine vorticity_tendency
+!         subroutine vorticity_tendency(vortg, tbuoyg, velgradg, vtend)
+!             use physics, only : f_cor
+!             double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+!             double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
+!             double precision              :: b(0:nz, 0:ny-1, 0:nx-1)
+!             double precision, intent(out) :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
+!             double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
+!             double precision              :: bs(0:nz, 0:nx-1, 0:ny-1) ! spectral buoyancy
+!             double precision              :: ds(0:nz, 0:nx-1, 0:ny-1) ! spectral derivatives
+!             double precision              :: db(0:nz, 0:ny-1, 0:nx-1) ! buoyancy derivatives
+!
+!             call start_timer(vtend_timer)
+!
+!             ! copy buoyancy
+!             b = tbuoyg(0:nz, :, :)
+!
+!             ! Compute spectral buoyancy (bs):
+!             call fftxyp2s(b, bs)
+!
+!             call diffy(bs, ds)                      ! b_y = db/dy in spectral space
+!             call fftxys2p(ds, db)                   ! db = b_y in physical space
+!
+!             !$omp parallel
+!             !$omp workshare
+!             vtend(0:nz, :, :, 1) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 1) & ! \omegax * du/dx
+!                                  + (vortg(0:nz, :, :, 2) + f_cor(2))                         &
+!                                     * (vortg(0:nz, :, :, 3) + velgradg(0:nz, :, :, 2)) & ! \omegay * dv/dx
+!                                  + (vortg(0:nz, :, :, 3) + f_cor(3)) * velgradg(0:nz, :, :, 4) & ! \omegaz * dw/dx
+!                                  + db                                                          ! db/dy
+!             !$omp end workshare
+!             !$omp end parallel
+!
+!             call diffx(bs, ds)                      ! b_x = db/dx in spectral space
+!             call fftxys2p(ds, db)                   ! db = b_x in physical space
+!
+!             !$omp parallel
+!             !$omp workshare
+!             vtend(0:nz, :, :, 2) =  vortg(0:nz, :, :, 1)             * velgradg(0:nz, :, :, 2) & ! \omegax * du/dy
+!                                  + (vortg(0:nz, :, :, 2) + f_cor(2)) * velgradg(0:nz, :, :, 3) & ! \omegay * dv/dy
+!                                  + (vortg(0:nz, :, :, 3) + f_cor(3)) * velgradg(0:nz, :, :, 5) & ! \omegaz * dw/dy
+!                                  - db                                                          ! dbdx
+!
+!             vtend(0:nz, :, :, 3) =  vortg(0:nz, :, :, 1)           * velgradg(0:nz, :, :, 4) & ! \omegax * dw/dx
+!                                  + (vortg(0:nz, :, :, 2) + f_cor(2)) * velgradg(0:nz, :, :, 5) & ! \omegay * dw/dy
+!                                  - (vortg(0:nz, :, :, 3) + f_cor(3))  *                         &
+!                                          (velgradg(0:nz, :, :, 1) + velgradg(0:nz, :, :, 3))   ! \omegaz * dw/dz
+!
+!             !$omp end workshare
+!             !$omp end parallel
+!
+!             ! Extrapolate to halo grid points
+!             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
+!             vtend(nz+1, :, :, :) = two * vtend(nz, :, :, :) - vtend(nz-1, :, :, :)
+!
+!             call stop_timer(vtend_timer)
+!
+!         end subroutine vorticity_tendency
 
 
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
