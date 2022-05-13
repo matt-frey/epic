@@ -23,27 +23,27 @@ module parcel_bc
         ! Apply mirroring bc on n-th parcel (vertically)
         ! @param[inout] position vector of parcel
         ! @param[inout] B matrix of parcel
-        pure subroutine apply_reflective_bc(position, B)
-            double precision, intent(inout) :: position(3), B(5)
+        subroutine apply_reflective_bc(position)!, B)
+            double precision, intent(inout) :: position(3)!, B(5)
 
             if (position(3) > upper(3)) then
                 position(3) = two * upper(3) - position(3)
                 ! flip sign of B13 and B23
-                B(3) = -B(3)
-                B(5) = -B(5)
+                !B(3) = -B(3)
+                !B(5) = -B(5)
             else if (position(3) < lower(3)) then
                 position(3) = two * lower(3) - position(3)
                 ! flip sign of B13 and B23
-                B(3) = -B(3)
-                B(5) = -B(5)
+                !B(3) = -B(3)
+                !B(5) = -B(5)
             endif
         end subroutine apply_reflective_bc
 
         ! Apply all boundary conditions to all parcels
         ! @param[inout] position vector of parcels
         ! @param[inout] B matrix of parcels
-        subroutine apply_parcel_bc(position, B)
-            double precision, intent(inout) :: position(:, :), B(:, :)
+        subroutine apply_parcel_bc(position)!, B)
+            double precision, intent(inout) :: position(:, :)!, B(:, :)
             integer                         :: n
 
             !$omp parallel default(shared)
@@ -53,7 +53,7 @@ module parcel_bc
                 call apply_periodic_bc(position(:, n))
 
                 ! vertical direction
-                call apply_reflective_bc(position(:, n), B(:, n))
+                call apply_reflective_bc(position(:, n))!, B(:, n))
             enddo
             !$omp end do
             !$omp end parallel

@@ -2,7 +2,7 @@
 !               Finds the parcels nearest every "small" parcel
 !==============================================================================
 module parcel_nearest
-    use constants, only : pi, f12
+    use constants, only : one
     use parcel_container, only : parcels, n_parcels, get_delx, get_dely
     use parameters, only : dx, dxi, vcell, hli, lower, extent, ncell, nx, ny, nz, vmin, max_num_parcels
     use options, only : parcel
@@ -40,6 +40,8 @@ module parcel_nearest
     integer :: ic, is, ijk, k, m, j, n
     integer :: ix, iy, iz, ix0, iy0, iz0
 
+    double precision :: rdxi(3)
+
     public :: find_nearest, merge_nearest_timer, merge_tree_resolve_timer
 
     contains
@@ -73,6 +75,7 @@ module parcel_nearest
                 allocate(l_small(max_num_parcels))
                 allocate(l_close(max_num_parcels))
 #endif
+                rdxi = one / (dx + 1.0e-12)
             endif
 
             nmerge = 0
@@ -84,9 +87,9 @@ module parcel_nearest
             ! Bin parcels in cells:
             ! Form list of small parcels:
             do n = 1, n_parcels
-                ix = int(dxi(1) * (parcels%position(1, n) - lower(1)))
-                iy = int(dxi(2) * (parcels%position(2, n) - lower(2)))
-                iz = int(dxi(3) * (parcels%position(3, n) - lower(3)))
+                ix = int(rdxi(1) * (parcels%position(1, n) - lower(1)))
+                iy = int(rdxi(2) * (parcels%position(2, n) - lower(2)))
+                iz = int(rdxi(3) * (parcels%position(3, n) - lower(3)))
 
                 ! Cell index of parcel:
                 ijk = 1 + ix + nx * iy + nx * ny * iz !This runs from 1 to ncell

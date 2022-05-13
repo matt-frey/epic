@@ -108,7 +108,7 @@ module ls_rk4
             call ls_rk4_substep(ca5, cb5, dt, 5)
 
             call start_timer(rk4_timer)
-            call apply_parcel_bc(parcels%position, parcels%B)
+            call apply_parcel_bc(parcels%position)!, parcels%B)
             call stop_timer(rk4_timer)
 
             ! we need to subtract 14 calls since we start and stop
