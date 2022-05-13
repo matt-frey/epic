@@ -3,8 +3,8 @@
 ! =============================================================================
 module parcel_split_mod
     use options, only : verbose
-    use constants, only : pi, three, five, f12, f34
-    use parameters, only : vmax
+    use constants, only : pi, three, five, f12, f34, f13, one
+    use parameters, only : vmax, lower, upper
     use parcel_container, only : parcel_container_type, n_parcels
     use parcel_bc, only : apply_reflective_bc
     use parcel_ellipsoid, only : diagonalise, get_aspect_ratio
@@ -17,6 +17,7 @@ module parcel_split_mod
     private :: dh
 
     integer :: split_timer
+    integer :: n_non_splits = 0
 
     contains
 
@@ -32,13 +33,15 @@ module parcel_split_mod
             double precision                           :: D(3), V(3, 3)
             integer                                    :: last_index
             integer                                    :: n, n_thread_loc
+            logical                                    :: l_outside
+            double precision                           :: z_shift, m, m2, fac
 
             call start_timer(split_timer)
 
             last_index = n_parcels
 
             !$omp parallel default(shared)
-            !$omp do private(n, B, vol, lam, D, V, n_thread_loc)
+            !$omp do private(n, B, vol, lam, D, V, n_thread_loc, l_outside, z_shift, m, m2, fac)
             do n = 1, last_index
                 B = parcels%B(:, n)
                 vol = parcels%volume(n)
@@ -48,9 +51,28 @@ module parcel_split_mod
                 ! evaluate maximum aspect ratio (a2 >= b2 >= c2)
                 lam = get_aspect_ratio(D)
 
-                if (lam <= threshold .and. vol <= vmax) then
+                if ((lam <= threshold) .and. (vol <= vmax)) then
                     cycle
                 endif
+                
+                ! check if child parcels would be vertically outside                                                                                                                                               
+                z_shift = dabs(V(3, 1)) * dh * dsqrt(D(1))
+                l_outside = (parcels%position(3, n) + z_shift > upper(3))
+                l_outside = (l_outside .or. (parcels%position(3, n) - z_shift < lower(3)))
+
+                if (l_outside) then
+                   m = (lam / threshold) ** f13
+                   m2 = m ** 2
+                   fac = one / (m2 * m2) - m2
+                   parcels%B(1, n) = m2 * B(1) + fac * D(1) * V(1, 1) ** 2
+                   parcels%B(2, n) = m2 * B(2) + fac * D(1) * V(1, 1) * V(2, 1)
+                   parcels%B(3, n) = m2 * B(3) + fac * D(1) * V(1, 1) * V(3, 1)
+                   parcels%B(4, n) = m2 * B(4) + fac * D(1) * V(2, 1) ** 2
+                   parcels%B(5, n) = m2 * B(5) + fac * D(1) * V(2, 1) * V(3, 1)
+                   n_non_splits = n_non_splits + 1
+                   cycle
+                endif
+                 
 
                 !
                 ! this ellipsoid is split, i.e., add a new parcel
@@ -86,10 +108,10 @@ module parcel_split_mod
 
                 ! child parcels need to be reflected into domain, if their center
                 ! is inside the halo region
-                call apply_reflective_bc(parcels%position(:, n_thread_loc), &
-                                         parcels%B(:, n_thread_loc))
+                call apply_reflective_bc(parcels%position(:, n_thread_loc))!, &
+                                         !parcels%B(:, n_thread_loc))
 
-                call apply_reflective_bc(parcels%position(:, n), parcels%B(:, n))
+                call apply_reflective_bc(parcels%position(:, n))!, parcels%B(:, n))
 
             enddo
             !$omp end do
