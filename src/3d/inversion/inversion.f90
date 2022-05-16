@@ -271,24 +271,24 @@ module inversion_mod
             call divergence(f, vtend(0:nz, :, :, 3))
 
 
-            ! Fill boundary values:
-            ! \omegax * du/dx + \omegay * dv/dx (where dv/dx = \omegaz + du/dy)
-            vtend(0, :, :, 1) = vortg(0, :, :, 1) * velgradg(0, :, :, 1) &
-                              + vortg(0, :, :, 2) * (vortg(0, :, :, 3 ) + velgradg(0, :, :, 2))
-
-            vtend(nz, :, :, 1) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 1) &
-                               + vortg(nz, :, :, 2) * (vortg(nz, :, :, 3 ) + velgradg(nz, :, :, 2))
-
-            ! \omegax * du/dy + \omegay * dv/dy
-            vtend(0, :, :, 2) = vortg(0, :, :, 1) * velgradg(0, :, :, 2) &
-                              + vortg(0, :, :, 2) * velgradg(0, :, :, 3)
-
-            vtend(nz, :, :, 2) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 2) &
-                               + vortg(nz, :, :, 2) * velgradg(nz, :, :, 3)
-
-            ! - \omegaz * (du/dx + dv/dy)
-            vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
-            vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
+!             ! Fill boundary values:
+!             ! \omegax * du/dx + \omegay * dv/dx (where dv/dx = \omegaz + du/dy)
+!             vtend(0, :, :, 1) = vortg(0, :, :, 1) * velgradg(0, :, :, 1) &
+!                               + vortg(0, :, :, 2) * (vortg(0, :, :, 3 ) + velgradg(0, :, :, 2))
+!
+!             vtend(nz, :, :, 1) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 1) &
+!                                + vortg(nz, :, :, 2) * (vortg(nz, :, :, 3 ) + velgradg(nz, :, :, 2))
+!
+!             ! \omegax * du/dy + \omegay * dv/dy
+!             vtend(0, :, :, 2) = vortg(0, :, :, 1) * velgradg(0, :, :, 2) &
+!                               + vortg(0, :, :, 2) * velgradg(0, :, :, 3)
+!
+!             vtend(nz, :, :, 2) = vortg(nz, :, :, 1) * velgradg(nz, :, :, 2) &
+!                                + vortg(nz, :, :, 2) * velgradg(nz, :, :, 3)
+!
+!             ! - \omegaz * (du/dx + dv/dy)
+!             vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
+!             vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
 
 !            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
 !            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
