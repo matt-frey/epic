@@ -40,6 +40,12 @@ module inversion_mod
             call fftxyp2s(vortg(0:nz, :, :, 2), bs)
             call fftxyp2s(vortg(0:nz, :, :, 3), cs)
 
+            !-------------------------------------------------------------
+            ! Apply filter in 3D spectral space:
+            call apply_filter(as)
+            call apply_filter(bs)
+            call apply_filter(cs)
+
             !Add -grad(lambda) where Laplace(lambda) = div(vortg) to
             !enforce the solenoidal condition on the vorticity field:
             call diffx(as, ds)
@@ -74,12 +80,12 @@ module inversion_mod
             !$omp end parallel
 
             !Compute spectrally filtered vorticity in physical space:
-            !$omp parallel shared(ds, es, fs, as, bs, cs, filt, nz) private(iz) default(none)
+            !$omp parallel shared(ds, es, fs, as, bs, cs, nz) private(iz) default(none)
             !$omp do
             do iz = 0, nz
-                ds(iz, :, :) = filt * as(iz, :, :)
-                es(iz, :, :) = filt * bs(iz, :, :)
-                fs(iz, :, :) = filt * cs(iz, :, :)
+                ds(iz, :, :) = as(iz, :, :)
+                es(iz, :, :) = bs(iz, :, :)
+                fs(iz, :, :) = cs(iz, :, :)
             enddo
             !$omp end do
             !$omp end parallel
@@ -232,11 +238,11 @@ module inversion_mod
         !::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
         ! Compute the gridded vorticity tendency:
-        subroutine vorticity_tendency(vortg, velog, tbuoyg, velgradg, vtend)
+        subroutine vorticity_tendency(vortg, velog, tbuoyg, vtend)
             double precision, intent(in)  :: vortg(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(in)  :: velog(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision, intent(in)  :: tbuoyg(-1:nz+1, 0:ny-1, 0:nx-1)
-            double precision, intent(in)  :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
+!             double precision, intent(in)  :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
             double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision              :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
 !            double precision              :: vst(0:nz, 0:nx-1, 0:ny-1, 3)
