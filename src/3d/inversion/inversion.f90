@@ -2,7 +2,7 @@ module inversion_mod
     use inversion_utils
     use parameters, only : nx, ny, nz, dxi
     use physics, only : f_cor
-    use constants, only : zero, two, f12, three, four
+    use constants, only : zero, two, f12
     use timer, only : start_timer, stop_timer
     implicit none
 
@@ -328,15 +328,9 @@ module inversion_mod
             div = div + df
 
             ! calculate df/dz with central differencing
-            do i = 1, nz-1
+            do i = 0, nz
                 df(i, :, :) = f12 * dxi(3) * (f(i+1, :, :, 3) - f(i-1, :, :, 3))
             enddo
-
-            ! one-sided 2nd order differencing at boundaries
-            ! iz = 0:  (4 * fs(1) - 3 * fs(0)  - fs(2)) / (2 * dz)
-            ! iz = nz: (3 * f(nz) + f(nz-2) - 4 * f(nz-1)) / (2 * dz)
-            df(0,  :, :) = f12 * dxi(3) * (four * f(1, :, :, 3) - three * f(0, :, :, 3) - f(2, :, :, 3))
-            df(nz, :, :) = f12 * dxi(3) * (three * f(nz, :, :, 3) + f(nz-2, :, :, 3) - four * f(nz-1, :, :, 3))
 
             div = div + df
 
