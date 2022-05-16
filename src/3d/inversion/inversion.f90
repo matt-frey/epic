@@ -245,7 +245,7 @@ module inversion_mod
 !             double precision, intent(in)  :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
             double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision              :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-!            double precision              :: vst(0:nz, 0:nx-1, 0:ny-1, 3)
+           double precision              :: vst(0:nz, 0:nx-1, 0:ny-1, 3)
 !            integer                       :: iz
 
             call start_timer(vtend_timer)
@@ -289,9 +289,13 @@ module inversion_mod
 !             vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
 !             vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
 
-!            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
-!            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
-!            call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, :, 3))
+            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
+            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
+            call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, :, 3))
+
+            call apply_filter(vst(:, :, :, 1))
+            call apply_filter(vst(:, :, :, 2))
+            call apply_filter(vst(:, :, :, 3))
 
 !            do iz = 0, nz
 !                vst(iz, :, :, 1) = filt * vst(iz, :, :, 1)
@@ -299,9 +303,9 @@ module inversion_mod
 !                vst(iz, :, :, 3) = filt * vst(iz, :, :, 3)
 !            enddo
 
-!            call fftxys2p(vst(:, :, :, 1), vtend(0:nz, :, :, 1))
-!            call fftxys2p(vst(:, :, :, 2), vtend(0:nz, :, :, 2))
-!            call fftxys2p(vst(:, :, :, 3), vtend(0:nz, :, :, 3))
+           call fftxys2p(vst(:, :, :, 1), vtend(0:nz, :, :, 1))
+           call fftxys2p(vst(:, :, :, 2), vtend(0:nz, :, :, 2))
+           call fftxys2p(vst(:, :, :, 3), vtend(0:nz, :, :, 3))
 
             ! Extrapolate to halo grid points
             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
