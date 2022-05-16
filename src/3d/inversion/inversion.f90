@@ -2,7 +2,7 @@ module inversion_mod
     use inversion_utils
     use parameters, only : nx, ny, nz, dxi
     use physics, only : f_cor
-    use constants, only : zero, two, f12
+    use constants, only : zero, two, f12, three, four
     use timer, only : start_timer, stop_timer
     implicit none
 
@@ -320,24 +320,30 @@ module inversion_mod
 
             ! calculate df/dx with central differencing
             do i = 1, nx-2
-                div(0:nz, 0:ny-1, i) = f12 * dxi(1) * (f(0:nz, 0:ny-1, i+1, 1) - f(0:nz, 0:ny-1, i-1, 1))
+                div(0:nz, :, i) = f12 * dxi(1) * (f(0:nz, :, i+1, 1) - f(0:nz, :, i-1, 1))
             enddo
-            div(0:nz, 0:ny-1, 0)    = f12 * dxi(1) * (f(0:nz, 0:ny-1, 1, 1) - f(0:nz, 0:ny-1, nx-1, 1))
-            div(0:nz, 0:ny-1, nx-1) = f12 * dxi(1) * (f(0:nz, 0:ny-1, 0, 1) - f(0:nz, 0:ny-1, nx-2, 1))
+            div(0:nz, :, 0)    = f12 * dxi(1) * (f(0:nz, :, 1, 1) - f(0:nz, :, nx-1, 1))
+            div(0:nz, :, nx-1) = f12 * dxi(1) * (f(0:nz, :, 0, 1) - f(0:nz, :, nx-2, 1))
 
             ! calculate df/dy with central differencing
             do i = 1, ny-2
-                df(0:nz, i, 0:nx-1) = f12 * dxi(2) * (f(0:nz, i+1, 0:nx-1, 2) - f(0:nz, i-1, 0:nx-1, 2))
+                df(0:nz, i, :) = f12 * dxi(2) * (f(0:nz, i+1, :, 2) - f(0:nz, i-1, :, 2))
             enddo
-            df(0:nz, 0,    0:nx-1) = f12 * dxi(2) * (f(0:nz, 1, 0:nx-1, 2) - f(0:nz, ny-1, 0:nx-1, 2))
-            df(0:nz, ny-1, 0:nx-1) = f12 * dxi(2) * (f(0:nz, 0, 0:nx-1, 2) - f(0:nz, ny-2, 0:nx-1, 2))
+            df(0:nz, 0,    :) = f12 * dxi(2) * (f(0:nz, 1, :, 2) - f(0:nz, ny-1, :, 2))
+            df(0:nz, ny-1, :) = f12 * dxi(2) * (f(0:nz, 0, :, 2) - f(0:nz, ny-2, :, 2))
 
             div = div + df
 
             ! calculate df/dz with central differencing
-            do i = 0, nz
-                df(i, 0:ny-1, 0:nx-1) = f12 * dxi(3) * (f(i+1, 0:ny-1, 0:nx-1, 3) - f(i-1, 0:ny-1, 0:nx-1, 3))
+            do i = 1, nz-1
+                df(i, :, :) = f12 * dxi(3) * (f(i+1, :, :, 3) - f(i-1, :, :, 3))
             enddo
+
+            ! one-sided 2nd order differencing at boundaries
+            ! iz = 0:  (4 * fs(1) - 3 * fs(0)  - fs(2)) / (2 * dz)
+            ! iz = nz: (3 * f(nz) + f(nz-2) - 4 * f(nz-1)) / (2 * dz)
+            df(0,  :, :) = f12 * dxi(3) * (four * f(1, :, :, 3) - three * f(0, :, :, 3) - f(2, :, :, 3))
+            df(nz, :, :) = f12 * dxi(3) * (three * f(nz, :, :, 3) + f(nz-2, :, :, 3) - four * f(nz-1, :, :, 3))
 
             div = div + df
 

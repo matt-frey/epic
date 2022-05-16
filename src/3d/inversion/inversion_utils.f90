@@ -273,11 +273,11 @@ module inversion_utils
             double precision, intent(out) :: ds(0:nz, nx, ny)
             integer                       :: iz
 
-            ! forward and backward differencing for boundary cells
-            ! iz = 0:  (fs(1) - fs(0)) / dz
-            ! iz = nz: (fs(nz) - fs(nz-1)) / dz
-            ds(0,  :, :) = dzi * (fs(1,    :, :) - fs(0,    :, :))
-            ds(nz, :, :) = dzi * (fs(nz,   :, :) - fs(nz-1, :, :))
+            ! one-sided 2nd order differencing for boundary cells
+            ! iz = 0:  (4 * fs(1) - 3 * fs(0)  - fs(2)) / (2 * dz)
+            ! iz = nz: (3 * f(nz) + f(nz-2) - 4 * f(nz-1)) / (2 * dz)
+            ds(0,  :, :) = f12 * dzi * (four * fs(1, :, :) - three * fs(0, :, :) - fs(2, :, :))
+            ds(nz, :, :) = f12 * dzi * (three * fs(nz, :, :) + fs(nz-2, :, :) - four * fs(nz-1, :, :))
 
             ! central differencing for interior cells
             !$omp parallel shared(ds, fs, hdzi, nz) private(iz) default(none)
