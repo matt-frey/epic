@@ -114,6 +114,8 @@ module inversion_utils
             ! Initialise FFTs and wavenumber arrays:
             call init2dfft(nx, ny, extent(1), extent(2), xfactors, yfactors, xtrig, ytrig, hrkx, hrky)
 
+            call init3dfft(nx, ny, nz, extent)
+
             !Define x wavenumbers:
             rkx(1) = zero
             do kx = 1, nwx-1
