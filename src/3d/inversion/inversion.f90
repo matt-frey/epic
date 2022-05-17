@@ -103,6 +103,14 @@ module inversion_mod
             call fftxys2p(es, vortg(0:nz, :, :, 2))
             call fftxys2p(fs, vortg(0:nz, :, :, 3))
 
+            ! \xi and \eta anti-symmetric, \zeta symmetric
+            vortg(  -1, :, :, 1) = - vortg(   1, :, :, 1) ! \xi
+            vortg(  -1, :, :, 2) = - vortg(   1, :, :, 2) ! \eta
+            vortg(  -1, :, :, 3) =   vortg(   1, :, :, 3) ! \zeta
+            vortg(nz+1, :, :, 1) = - vortg(nz-1, :, :, 1) ! \xi
+            vortg(nz+1, :, :, 2) = - vortg(nz-1, :, :, 2) ! \eta
+            vortg(nz+1, :, :, 3) =   vortg(nz-1, :, :, 3) ! \zeta
+
             !Define horizontally-averaged flow by integrating horizontal vorticity:
             ubar(0) = zero
             vbar(0) = zero
@@ -181,9 +189,13 @@ module inversion_mod
             ! compute the velocity gradient tensor
             call vel2vgrad(svelog, velgradg)
 
-            ! use extrapolation in u, v and w to fill z grid points outside domain:
-            velog(  -1, :, :, :) = two * velog( 0, :, :, :) - velog(   1, :, :, :)
-            velog(nz+1, :, :, :) = two * velog(nz, :, :, :) - velog(nz-1, :, :, :)
+            ! use symmetry in u and v and anti-symmetry in w to fill z grid points outside domain:
+            velog(  -1, :, :, 1) =   velog(   1, :, :, 1) ! u
+            velog(  -1, :, :, 2) =   velog(   1, :, :, 2) ! v
+            velog(  -1, :, :, 3) = - velog(   1, :, :, 3) ! w
+            velog(nz+1, :, :, 1) =   velog(nz-1, :, :, 1) ! u
+            velog(nz+1, :, :, 2) =   velog(nz-1, :, :, 2) ! v
+            velog(nz+1, :, :, 3) = - velog(nz-1, :, :, 3) ! w
 
             call stop_timer(vor2vel_timer)
 
@@ -245,7 +257,7 @@ module inversion_mod
 !             double precision, intent(in)  :: velgradg(-1:nz+1, 0:ny-1, 0:nx-1, 5)
             double precision, intent(out) :: vtend(-1:nz+1, 0:ny-1, 0:nx-1, 3)
             double precision              :: f(-1:nz+1, 0:ny-1, 0:nx-1, 3)
-           double precision              :: vst(0:nz, 0:nx-1, 0:ny-1, 3)
+!            double precision              :: vst(0:nz, 0:nx-1, 0:ny-1, 3)
 !            integer                       :: iz
 
             call start_timer(vtend_timer)
@@ -289,23 +301,23 @@ module inversion_mod
 !             vtend(0,  :, :, 3) = - vortg(0,  :, :, 3) * (velgradg(0,  :, :, 1) + velgradg(0,  :, :, 3))
 !             vtend(nz, :, :, 3) = - vortg(nz, :, :, 3) * (velgradg(nz, :, :, 1) + velgradg(nz, :, :, 3))
 
-            call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
-            call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
-            call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, :, 3))
-
-            call apply_filter(vst(:, :, :, 1))
-            call apply_filter(vst(:, :, :, 2))
-            call apply_filter(vst(:, :, :, 3))
-
-!            do iz = 0, nz
-!                vst(iz, :, :, 1) = filt * vst(iz, :, :, 1)
-!                vst(iz, :, :, 2) = filt * vst(iz, :, :, 2)
-!                vst(iz, :, :, 3) = filt * vst(iz, :, :, 3)
-!            enddo
-
-           call fftxys2p(vst(:, :, :, 1), vtend(0:nz, :, :, 1))
-           call fftxys2p(vst(:, :, :, 2), vtend(0:nz, :, :, 2))
-           call fftxys2p(vst(:, :, :, 3), vtend(0:nz, :, :, 3))
+!             call fftxyp2s(vtend(0:nz, :, :, 1), vst(:, :, :, 1))
+!             call fftxyp2s(vtend(0:nz, :, :, 2), vst(:, :, :, 2))
+!             call fftxyp2s(vtend(0:nz, :, :, 3), vst(:, :, :, 3))
+!
+!             call apply_filter(vst(:, :, :, 1))
+!             call apply_filter(vst(:, :, :, 2))
+!             call apply_filter(vst(:, :, :, 3))
+!
+! !            do iz = 0, nz
+! !                vst(iz, :, :, 1) = filt * vst(iz, :, :, 1)
+! !                vst(iz, :, :, 2) = filt * vst(iz, :, :, 2)
+! !                vst(iz, :, :, 3) = filt * vst(iz, :, :, 3)
+! !            enddo
+!
+!            call fftxys2p(vst(:, :, :, 1), vtend(0:nz, :, :, 1))
+!            call fftxys2p(vst(:, :, :, 2), vtend(0:nz, :, :, 2))
+!            call fftxys2p(vst(:, :, :, 3), vtend(0:nz, :, :, 3))
 
             ! Extrapolate to halo grid points
             vtend(-1,   :, :, :) = two * vtend(0,  :, :, :) - vtend(1,    :, :, :)
